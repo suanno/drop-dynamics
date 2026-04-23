@@ -33,6 +33,8 @@ p.sw.bifcheck=0;
 p.sw.foldcheck=0;
 p.nc.lammax=5;
 p=cont(p,500);
+branch = p.branch;
+writematrix(branch,'1D_c0_continuation_22_04_26.txt');
 %% [NOT NECESSARY, I can measure the lagrange multiplier while continuating in mass!]
 % Remove mass constraint (but not xcm) and continuation in lagrange
 % multiplier of the mass

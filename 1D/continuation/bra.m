@@ -24,4 +24,4 @@ Omega = sum(p.mat.M0*(what));
 I = sum(p.mat.M0*(hout^3.*hhat./h.^3));
 K = sum(p.mat.M0*(hhat.^2./h.^3));
 
-out = [ha; c0; dWout; hout; Omega; I; K];
+out = [ha; c0; hmax; dWout; hout; Omega; I; K];
