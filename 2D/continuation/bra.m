@@ -11,8 +11,6 @@ hhat = h-hout*e1;
 what = wetting_potential(h,ha)-wetting_potential(hout,ha)*e1;
 Qin = h.^3;
 
-% Solve ode for Psi v=1,2 using PDEtoolbox
-
 
 %M0 = p.mat.M0;
 
