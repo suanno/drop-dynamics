@@ -15,21 +15,32 @@ p=swibra('tr','bpt1','b1',-0.1); p=cont(p,30);
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
 
+%%
 % Solve ode for Psi v=1,2 using PDEtoolbox
 h = p.u(1:p.nu); % Exclude the parameters of the pde
-Qin = h.^3;
+Qin = h.^3/3;
 x=getpte(p); x=x';
-% Interpolate
-dhdr = p.mat.M \ (spdiags(1/x,0,p.np,p.np)*p.mat.Kx*h);
-hfun = @(r) interp1(x,h,r,'pchip',0);
-hrfun = @(r) interp1(x,dhdr,r,'pchip',0);
-Qfun = @(r) interp1(x,Qin,r,'pchip',0);
-Qrfun = @(r) hrfun(r)*hfun(r)^2/3;
+% Derivatives
+dhdr = p.mat.Kx*h; % or M/Kx*h ??
+dQdr = dhdr.*(h.^2);
+% I write the residual for the psi1 ode
+% a(r)psi''+b(r)psi'+c(r)psi+d(r)=0
+% As there is no non-linearity, I can solve psi by solving a linear system!
+% (I can use just the \ operatioN!)
+a_coeff = x.^2; b_coeff = x.*(1-x.*(dQdr./Qin)); c_coeff = -1*ones(p.nu,1); d_coeff = (x.^2).*dhdr;
+
+% why multiply on right by x dependent coefficients?
+LHS = -spdiags(a_coeff,0,p.np,p.np)*p.mat.K + spdiags(b_coeff,0,p.np,p.np)*p.mat.Kx - p.mat.M;
+RHS = -d_coeff;
+u = LHS \ RHS;
 % Solve ode for psi1
-[rr, psi1] = ode45(@(r,psi) psi1_ode(r,psi,Qfun, hfun, Qrfun, hrfun), [p.vol,0], [0; 0]);
+%[rr, psi1] = ode45(@(r,psi) psi1_ode(r,psi,Qfun, hfun, Qrfun, hrfun), [p.vol,0], [0; 0]);
+
+norm(LHS*u-RHS)
+
 
 figure(9);
-plot(rr,psi1(:,1));
+plot(x,u);
 %p=cont(p,10); 
 %branch = p.branch;
 %writematrix(branch,'1D_c0_continuation_22_04_26.txt');

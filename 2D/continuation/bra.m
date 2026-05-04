@@ -9,7 +9,7 @@ mass = par(2);  % Integral of h1 (without the hat!)
 hout = min(h);  %Measured hout
 hhat = h-hout*e1;
 what = wetting_potential(h,ha)-wetting_potential(hout,ha)*e1;
-Qin = h.^3;
+Qin = h.^3;%Should be divided by 3??
 
 
 %M0 = p.mat.M0;
@@ -17,7 +17,7 @@ Qin = h.^3;
 % Integral constraint: q = 1/vol*integral(u) - c0 := 0
 %a2 = sum(M*hhat);
 
-
+% Copy from 1D!!!
 a1 = trapz(x, what);
 a2 = trapz(x, hhat);
 a3 = trapz(x, hhat./Qin);

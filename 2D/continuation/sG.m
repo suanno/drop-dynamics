@@ -9,5 +9,5 @@ F=p.mat.M*f;
 % derivative)
 % The CM translation invariance is not necessary for radial equation as r=0 is
 % a special point
-r=p.mat.K*u-spdiags(1/x,0,p.np,p.np)*p.mat.Kx*u-F;     % The convective derivative Kx has a + sign while the laplacian K has a - sign
+r=p.mat.K*u-diag(1/x)*p.mat.Kx*u-F;     % The convective derivative Kx has a + sign while the laplacian K has a - sign
   
