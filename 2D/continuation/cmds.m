@@ -20,27 +20,30 @@ p.sw.foldcheck=1;
 h = p.u(1:p.nu); % Exclude the parameters of the pde
 Qin = h.^3/3;
 x=getpte(p); x=x';
-% Derivatives
-dhdr = p.mat.Kx*h; % or M/Kx*h ??
-dQdr = dhdr.*(h.^2);
-% I write the residual for the psi1 ode
-% a(r)psi''+b(r)psi'+c(r)psi+d(r)=0
-% As there is no non-linearity, I can solve psi by solving a linear system!
-% (I can use just the \ operatioN!)
-a_coeff = x.^2; b_coeff = x.*(1-x.*(dQdr./Qin)); c_coeff = -1*ones(p.nu,1); d_coeff = (x.^2).*dhdr;
+% Shift h(x) such that x=0 is the max
+x = flip(x);
+% Build matrices fo FEM
+fem=p.pdeo.fem; gr=p.pdeo.grid; 
+[K,~,~]=fem.assema(gr,1,1,1);
+Kxr=convection(fem,gr,1/x);
+[KdlogQdr,~,~]=fem.assema(gr,log(Qin),1,1);
+[~,Mr2,~]=fem.assema(gr,1,1,1);
+Kx=convection(fem,gr,1);
+LHS = -K+Kxr+KdlogQdr-Mr2;
+RHS = -Kx*h;
+psi = LHS \ RHS;
 
-% why multiply on right by x dependent coefficients?
-LHS = -spdiags(a_coeff,0,p.np,p.np)*p.mat.K + spdiags(b_coeff,0,p.np,p.np)*p.mat.Kx - p.mat.M;
-RHS = -d_coeff;
-u = LHS \ RHS;
-% Solve ode for psi1
-%[rr, psi1] = ode45(@(r,psi) psi1_ode(r,psi,Qfun, hfun, Qrfun, hrfun), [p.vol,0], [0; 0]);
-
-norm(LHS*u-RHS)
-
+% Print residual
+res = LHS*psi-RHS;
+norm(res)
+% Compute residual without FEM
+psix  = gradient(psi, x);        % first derivative
+psixx = gradient(psix, x);       % second derivative
+res = psixx + (1./x).*psix.*(1-x.*gradient(log(Qin),x)) - (1./x.^2).*psi + gradient(h,x);
+norm(res)
 
 figure(9);
-plot(x,u);
+plot(x,psi);
 %p=cont(p,10); 
 %branch = p.branch;
 %writematrix(branch,'1D_c0_continuation_22_04_26.txt');

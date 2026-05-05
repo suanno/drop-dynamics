@@ -7,4 +7,4 @@ Fu=p.mat.M*spdiags(fu,0,p.nu,p.nu);  % put derivatives into (sparse) matrix
 x=getpte(p); x=x';
 
 % Polar coordinate laplacian with radial symmetry (no theta derivative)
-Gu=p.mat.K-spdiags(1/x,0,p.np, p.np)*p.mat.Kx-Fu;
+Gu=p.mat.K-p.mat.Kx-Fu;
