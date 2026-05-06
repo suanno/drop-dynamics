@@ -2,7 +2,7 @@
 close all; keep pphome; 
 %% cell 1: init
 p=[]; par=[0.5 0.6 0]; % h_a, initial concentration, chemical potential (lagrange mult mass)
-p=chinit(p,6.25,200,par); p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,12.5,500,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
@@ -17,30 +17,58 @@ p.sw.foldcheck=1;
 
 %%
 % Solve ode for Psi v=1,2 using PDEtoolbox
-h = p.u(1:p.nu); % Exclude the parameters of the pde
-Qin = h.^3/3;
-x=getpte(p); x=x';
-% Shift h(x) such that x=0 is the max
-x = flip(x);
-% Build matrices fo FEM
-fem=p.pdeo.fem; gr=p.pdeo.grid; 
-[K,~,~]=fem.assema(gr,1,1,1);
-Kxr=convection(fem,gr,1/x);
-[KdlogQdr,~,~]=fem.assema(gr,log(Qin),1,1);
-[~,Mr2,~]=fem.assema(gr,1,1,1);
-Kx=convection(fem,gr,1);
-LHS = -K+Kxr+KdlogQdr-Mr2;
-RHS = -Kx*h;
+% Solution vector
+h = p.u(1:p.nu);
+Q = h.^3 / 3;
+
+x = getpte(p);
+x = x(:);
+
+fem = p.pdeo.fem;
+gr  = p.pdeo.grid;
+
+% --- compute logh
+N = length(x);
+
+slope = (h(2:end) - h(1:end-1)) ./ (x(2:end) - x(1:end-1));
+
+dh_dx = zeros(N,1);
+dh_dx(2:N-1) = 0.5*(slope(1:end-1) + slope(2:end));
+dh_dx(1) = slope(1);
+dh_dx(end) = slope(end);
+
+
+% --- FEM assembly
+[Kdiff,~,~] = fem.assema(gr, x.^2, 0, 0);
+Kconv = convection(fem, gr, -x-3*x.^2.*dh_dx./h);
+[~,Mreact,~] = fem.assema(gr, 0, 1, 0);
+
+Krhs = convection(fem, gr, x.^2);
+
+RHS = -Krhs * h;
+
+LHS = -Kdiff + Kconv - Mreact;
+
 psi = LHS \ RHS;
 
 % Print residual
 res = LHS*psi-RHS;
 norm(res)
 % Compute residual without FEM
-psix  = gradient(psi, x);        % first derivative
-psixx = gradient(psix, x);       % second derivative
-res = psixx + (1./x).*psix.*(1-x.*gradient(log(Qin),x)) - (1./x.^2).*psi + gradient(h,x);
-norm(res)
+dx = x(2)-x(1);
+
+psix  = gradient(psi, dx);
+psixx = gradient(psix, dx);
+
+hx = gradient(h, dx);
+dlogQdx = gradient(log(Q), dx);
+
+R = psixx ...
+    - dlogQdx .* psix ...
+    + (1./x).*psix ...
+    - (1./x.^2).*psi ...
+    + hx;
+norm(R,Inf)
 
 figure(9);
 plot(x,psi);
