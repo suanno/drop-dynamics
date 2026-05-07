@@ -11,11 +11,12 @@ c0: mean concentration (par# 2)
 %%
 par = u(p.nu+1:end);
 u = u(1:p.nu);
-c0 = par(2);
+x=getpte(p); x=x';
+c1 = par(2);
 
 % Mass matrix (needed for (riemann) integrals)
-M = p.mat.M;
+M=p.mat.M;
 
 % Integral constraint: q = 1/vol*integral(u) - c0 := 0
-q = sum(M*u)/p.vol - c0; %The domain size is par(5)
+q = sum(M*(x.*u))/p.vol - c1; %The domain size is par(5)
 end
