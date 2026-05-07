@@ -4,7 +4,7 @@ close all; keep pphome;
 p=[]; par=[0.5 0.62 0 0]; % h_a, initial concentration, chemical potential (lagrange mult mass), velocity (lagrange mult translational invariance OR center of mass lagrange mult)
 p.reducedmass=0;
 p.xcm = 0;
-p=chinit(p,25,200,par); p.nc.nq=1; p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,12.5,200,par); p.nc.nq=1; p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2 3];
 p.nc.lammax=0.64; p.sol.ds=0.001; p.nc.dsmax=0.01; 

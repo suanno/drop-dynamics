@@ -18,10 +18,36 @@ p.sw.foldcheck=1;
 %%
 
 
-% Solve ode for Psi v=1,2 using PDEtoolbox
+% Solve ode for Psi v=1 using PDEtoolbox
 h = p.u(1:p.nu); % Exclude the parameters of the pde
 Qin = h.^3/3;
 x=getpte(p); x=x';
+drlogQin=3*(gradient(h,x)./h);
+% Build matrices for FEM
+fem=p.pdeo.fem; gr=p.pdeo.grid; 
+[Kr2,~,~]=fem.assema(gr,x.^2,1,1);
+Kxr2=convection(fem,gr,x.^2);
+Kx2r=convection(fem,gr,2*x);
+Kxr2logQin=convection(fem,gr,x.*(1-x.*drlogQin));
+[~,M,~]=fem.assema(gr,1,1,1);
+LHS = Kxr2logQin--Kx2r-Kr2-M;
+RHS = -Kxr2*h;
+psi1 = LHS \ RHS;
+% Print residual
+res = LHS*psi1-RHS;
+norm(res)
+% Solve ode for Psi v=2
+Kxr2=convection(fem,gr,(x.^2).*gradient(Qin,x));
+RHS = -Kxr2*h;
+psi2 = LHS \ RHS;
+% Print residual
+res = LHS*psi2-RHS;
+norm(res)
+figure(9);
+plot(x,psi1);
+figure(10);
+plot(x,psi2);
+
 
 % Compute residuals for h0in ODE computing h0out from hmax
 h_a=par(1);
@@ -38,29 +64,13 @@ res=(Kr-Kx)*h+Mr*(deriv_wetting_potential(h,h_a)-dwout);
 norm(res)
 
 
-drlogQin=3*(gradient(h,x)./h);
-% Build matrices for FEM
-fem=p.pdeo.fem; gr=p.pdeo.grid; 
-[Kr2,~,~]=fem.assema(gr,x.^2,1,1);
-Kxr2=convection(fem,gr,x.^2);
-Kx2r=convection(fem,gr,2*x);
-Kxr2logQin=convection(fem,gr,x.*(1-x.*drlogQin));
-[~,M,~]=fem.assema(gr,1,1,1);
-LHS = Kxr2logQin--Kx2r-Kr2-M;
-RHS = -Kxr2*h;
-psi = LHS \ RHS;
 
-% Print residual
-res = LHS*psi-RHS;
-norm(res)
 % Compute residual without FEM
 % psix  = gradient(psi, x);        % first derivative
 % psixx = gradient(psix, x);       % second derivative
 % res = (x.^2).*psixx + x.*psix.*(1-x.*drlogQin) - psi + (x.^2).*gradient(h,x);
 % norm(res)
 
-figure(9);
-plot(x,psi);
 %p=cont(p,10); 
 %branch = p.branch;
 %writematrix(branch,'1D_c0_continuation_22_04_26.txt');
