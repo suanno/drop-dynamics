@@ -114,13 +114,13 @@ class ThinfilmProblem(Problem):
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=25,N=20) as problem:
+    with ThinfilmProblem(L=25,N=100) as problem:
 
         # Maximum refinement level
         problem.max_refinement_level = 1
         problem.max_permitted_error = 0.0005
         problem.min_permitted_error = 0.00005
-        problem.run(endtime=1e7, startstep=1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+        problem.run(endtime=1e4, startstep=1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
 
         #problem.solve()  # Solve the problem
         print(problem.get_mesh("domain").evaluate_all_observables())
