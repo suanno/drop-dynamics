@@ -4,11 +4,10 @@ par = u(p.nu+1:end); % Parameters
 x=getpte(p); x=x';
 e1 = ones(1,length(x))';
 
-ha = par(1);
-mass = par(2);  % Integral of h1 (without the hat!)
+mass = par(1);  % Integral of h1 (without the hat!)
 hout = min(h);  %Measured hout
 hhat = h-hout*e1;
-what = wetting_potential(h,ha)-wetting_potential(hout,ha)*e1;
+what = wetting_potential(h)-wetting_potential(hout)*e1;
 Qin = h.^3;%Should be divided by 3??
 
 
@@ -22,4 +21,4 @@ a1 = trapz(x, what);
 a2 = trapz(x, hhat);
 a3 = trapz(x, hhat./Qin);
 
-out = [ha; mass; hout; a1; a2; a3];
+out = [mass; hout; a1; a2; a3];

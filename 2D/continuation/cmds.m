@@ -1,12 +1,12 @@
 %% demo for pBC 1D, clear workspace 
 close all; keep pphome; 
 %% cell 1: init
-p=[]; par=[0.5 0 0]; % h_a, initial concentration, chemical potential (lagrange mult mass)
+p=[]; par=[0.5 0 0]; % concentration, chemical potential (lagrange mult mass)
 p=chinit(p,12.5,2000,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
-p.nc.lammax=12.5; p.sol.ds=0.01; p.nc.dsmax=0.5;
+p.nc.lammax=20; p.sol.ds=0.1; p.nc.dsmax=0.5;
 %% First branch continuation
 p=setfn(p,'tr'); p=findbif(p,30);
 %% Switch to droplet branch
@@ -16,52 +16,245 @@ p.sw.bifcheck=0;
 p.sw.foldcheck=1;
 
 %%
+H = p.u(1:p.nu); % Exclude the parameters of the pde
+Hout = min(H);
+Hmax = max(H);
+rval=getpte(p); rval=rval';
+
+% Compute drop radius
+x0 = rval(1);  H0 = H(1);
+x1 = rval(2);  H1 = H(2);
+x2 = rval(3);  H2 = H(3);
+% Parabolic interpolant through the first three points
+fit_coeff = polyfit([x0 x1 x2], [H0 H1 H2], 2);
+% Coefficient of the parabolic approximation h(r) = Hmax + c*r^2
+d2h0 = 2*fit_coeff(1);
+c = 0.5*d2h0;      % = p(1)
+% Compute where the parabola intersects h=hout
+rcrit = sqrt((Hout - Hmax)/c);
 
 
-% Solve ode for Psi v=1 using PDEtoolbox
-h = p.u(1:p.nu); % Exclude the parameters of the pde
-Qin = h.^3/3;
-x=getpte(p); x=x';
-drlogQin=3*(gradient(h,x)./h);
-% Build matrices for FEM
-fem=p.pdeo.fem; gr=p.pdeo.grid; 
-[Kr2,~,~]=fem.assema(gr,x.^2,1,1);
-Kxr2=convection(fem,gr,x.^2);
-Kx2r=convection(fem,gr,2*x);
-Kxr2logQin=convection(fem,gr,x.*(1-x.*drlogQin));
-[~,M,~]=fem.assema(gr,1,1,1);
-LHS = Kxr2logQin--Kx2r-Kr2-M;
-RHS = -Kxr2*h;
-psi1 = LHS \ RHS;
-% Print residual
-res = LHS*psi1-RHS;
-norm(res)
-% Solve ode for Psi v=2
-Kxr2=convection(fem,gr,(x.^2).*gradient(Qin,x));
-RHS = -Kxr2*h;
-psi2 = LHS \ RHS;
-% Print residual
-res = LHS*psi2-RHS;
-norm(res)
-figure(9);
-plot(x,psi1);
+% Solve ode for Psi 1
+g = H - Hout;
+eta=1;
+Qin = H.^3/(3*eta);
+
+c = Qin.^(-1);
+a = 1 ./ ((1e-12+rval.^2) .* Qin);    % To eliminate the divergence
+
+fac  = 1 - 3*g./H;
+Hr = diff(H)./diff(rval);
+Hr = [0; Hr];
+frhs = -(fac .* Hr) ./ Qin;
+
+fem=p.pdeo.fem;
+gr=p.pdeo.grid;
+[Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
+psi1 = (Kpsi + Mpsi)\Fpsi;
+
+% Psi 2
+
+Qin  = H.^3/(3*eta);
+Qout = Hout.^3/(3*eta);
+% c(r) and a(r) are the same! Only frhs is different
+
+frhs = -3 .* (Hout.^3 ./ H.^4) .* Hr;
+
+[Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
+psi2 = (Kpsi + Mpsi)\Fpsi;
+
+
 figure(10);
-plot(x,psi2);
+plot(rval,psi1);
+title('\psi^{[1]}(r)');
+figure(11);
+plot(rval,psi2);
+title('\psi^{[2]}(r)');
 
 
-% Compute residuals for h0in ODE computing h0out from hmax
-h_a=par(1);
-% hr=gradient(h,x);
-% hrr=gradient(hr,x);
-dwout=(deriv_wetting_potential(max(h),h_a)-deriv_wetting_potential(h_a,h_a))/(max(h)-h_a);
-% res=-x.*hrr-hr+x.*deriv_wetting_potential(h,h_a)-x.*dwout;
-% norm(res)
-fem=p.pdeo.fem; gr=p.pdeo.grid; 
-[Kr,~,~]=fem.assema(gr,x,1,1);
-Kx=convection(fem,gr,1);
-[~,Mr,~]=fem.assema(gr,1,1,1);
-res=(Kr-Kx)*h+Mr*(deriv_wetting_potential(h,h_a)-dwout);
-norm(res)
+%% Plot B0in animation
+gradW = 1;
+v1_values = linspace(-1,1,100);
+
+% === POLAR GRID (compute only once) ===
+Nr     = 20;
+Ntheta = 36;
+
+r_vec     = linspace(0.5,20,Nr);
+theta_vec = linspace(0,2*pi,Ntheta+1);
+theta_vec(end) = [];
+
+[R,THETA] = meshgrid(r_vec,theta_vec);
+
+X = R.*cos(THETA);
+Y = R.*sin(THETA);
+
+% Circle coordinates
+theta = linspace(0,2*pi,200);
+xc = rcrit*cos(theta);
+yc = rcrit*sin(theta);
+
+figure
+
+% ---- First frame ----
+v1 = v1_values(1);
+
+fval  = v1*psi1 + gradW*psi2;
+frval = diff(fval)./diff(rval);
+frval = [0; frval];
+
+rval  = full(rval(:));
+fval  = full(fval(:));
+frval = full(frval(:));
+
+f    = @(rvar) interp1(rval,fval,rvar,'pchip');
+dfdr = @(rvar) interp1(rval,frval,rvar,'pchip');
+
+BR     = -(1./R).*f(R).*cos(THETA);
+BTHETA = dfdr(R).*sin(THETA);
+
+BX = BR.*cos(THETA) - BTHETA.*sin(THETA);
+BY = BR.*sin(THETA) + BTHETA.*cos(THETA);
+
+q = quiver(X,Y,BX,BY,0.8,'b');
+hold on
+plot(xc,yc,'r','LineWidth',2)
+
+axis equal
+axis([-20 20 -20 20])      % Fix axes for all frames
+grid on
+xlabel('x')
+ylabel('y')
+
+% Uncomment to save a video
+% video = VideoWriter('Bfield.mp4','MPEG-4');
+% video.FrameRate = 20;
+% open(video);
+
+% ---- Animation ----
+fig = figure('Position',[100 100 560 420]);
+set(fig,'Resize','off');
+video = VideoWriter('Bfield.avi','Motion JPEG AVI');
+video.FrameRate = 20;
+open(video);
+for k = 1:length(v1_values)
+
+    v1 = v1_values(k);
+
+    fval  = v1*psi1 + gradW*psi2;
+    frval = diff(fval)./diff(rval);
+    frval = [0; frval];
+
+    fval  = full(fval(:));
+    frval = full(frval(:));
+
+    f    = @(rvar) interp1(rval,fval,rvar,'pchip');
+    dfdr = @(rvar) interp1(rval,frval,rvar,'pchip');
+
+    BR     = -(1./R).*f(R).*cos(THETA);
+    BTHETA = dfdr(R).*sin(THETA);
+
+    BX = BR.*cos(THETA) - BTHETA.*sin(THETA);
+    BY = BR.*sin(THETA) + BTHETA.*cos(THETA);
+
+    % Update quiver data
+    q.UData = BX;
+    q.VData = BY;
+
+    title(sprintf('Vector field B,  v_1 = %.2f',v1))
+
+    drawnow
+
+    % Save
+    writeVideo(video,getframe(gcf));
+end
+
+close(video);
+%% Parameters
+v1 = -1;
+gradW = 1;
+%% Plot B0in
+% === Plot B-field for first value of v1 ===
+v1 = v1_values(1);
+
+fval  = v1*psi1 + gradW*psi2;
+frval = diff(fval)./diff(rval);
+frval = [0; frval];
+
+fval  = full(fval(:));
+frval = full(frval(:));
+
+f    = @(rvar) interp1(rval,fval,rvar,'pchip');
+dfdr = @(rvar) interp1(rval,frval,rvar,'pchip');
+
+BR     = -(1./R).*f(R).*cos(THETA);
+BTHETA = dfdr(R).*sin(THETA);
+
+BX = BR.*cos(THETA) - BTHETA.*sin(THETA);
+BY = BR.*sin(THETA) + BTHETA.*cos(THETA);
+
+figure;
+quiver(X,Y,BX,BY,0.8,'b');
+hold on
+plot(xc,yc,'r','LineWidth',2)
+
+axis equal; grid on;
+axis([-20 20 -20 20])
+title(sprintf('B field for v_1 = %.2f', v1))
+xlabel('x'); ylabel('y');
+
+%% Plot Stream function Psihat and isolines (level sets)
+% === CARTESIAN GRID ===
+Nx = 300;
+xvec = linspace(-20, 20, Nx);
+yvec = linspace(-20, 20, Nx);
+[Xc, Yc] = meshgrid(xvec, yvec);
+
+% === POLAR COORDINATES ON GRID ===
+Rc     = sqrt(Xc.^2 + Yc.^2);
+THETAc = atan2(Yc, Xc);
+
+% === MASK outside r=[0.5, 20] ===
+mask = Rc < 0.5 | Rc > 20;
+
+% === EVALUATE cos(theta)*f(r) ===
+F_grid = -sin(THETAc) .* f(Rc);   % uses your anonymous function
+F_grid(mask) = NaN;                      % hide outside domain
+
+% === PLOT ===
+figure;
+
+% Colormap
+pcolor(Xc, Yc, F_grid);
+shading interp;
+%colormap(rdbu);   % or use 'coolwarm', 'rdbu', 'bwr' if no custom cmap
+colorbar;
+hold on;
+
+% Isolines
+contour(Xc, Yc, F_grid, 20, 'k', 'LineWidth', 0.8);
+
+% x axis
+plot([-20 20], [0 0], 'black--', 'LineWidth', 1.5);
+
+% Circle at r=rcrit radius of the drop
+theta_circ = linspace(0, 2*pi, 500);
+plot(rcrit*cos(theta_circ), rcrit*sin(theta_circ), 'r-', 'LineWidth', 1.5);
+
+axis equal; grid on;
+xlabel('x'); ylabel('y');
+title('-sin(\theta) \cdot f(r)');
+
+% 
+% c = x./Qin;
+% f=(2-3*min(H)./H);
+% Hr = diff(H)./diff(x);
+% Hr=[Hr; Hr(end)];
+% frhs = -(x.*f.*Hr)./Qin;
+% fem=p.pdeo.fem;
+% gr=p.pdeo.grid; 
+% [K_psi,M_psi,F_psi] = fem.assema(gr,c,0,frhs);
+% psi1 = K_psi \ F_psi;
 
 
 

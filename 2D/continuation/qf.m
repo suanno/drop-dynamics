@@ -17,6 +17,6 @@ c1 = par(2);
 % Mass matrix (needed for (riemann) integrals)
 M=p.mat.M;
 
-% Integral constraint: q = 1/vol*integral(u) - c0 := 0
-q = sum(M*(x.*u))/p.vol - c1; %The domain size is par(5)
+% Integral constraint
+q = sum(M*(x.*u))/p.vol - c1; 
 end

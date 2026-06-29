@@ -1,27 +1,27 @@
 function out = bra(p, u)
-h = p.mat.fill*u(1:p.nu); % Exclude the parameters of the pde
+H = p.mat.fill*u(1:p.nu); % Exclude the parameters of the pde
 par = u(p.nu+1:end); % Parameters
 x=getpte(p); x=x';
 e1 = ones(1,length(x))';
 
-ha = par(1);
-c0 = par(2);  % Integral of h1 (without the hat!)
+c0 = par(1);  % Integral of h1 (without the hat!)
 
 %hout from hmax
-hmax = max(h);
-hout = ha+(wetting_potential(hmax,ha)-wetting_potential(ha,ha))/((hmax-ha)*second_deriv_wetting_potential(ha,ha));
+Hmax = max(H);
+Hout = 1+(wetting_potential(Hmax)-wetting_potential(1))/((Hmax-1)*second_deriv_wetting_potential(1));
 %hout = min(h);  %Measured hout
-hhat = h-hout*e1;
-what = wetting_potential(h,ha)-wetting_potential(hout,ha)*e1;
+Hhat = H-Hout*e1;
+omegahat = wetting_potential(H)-wetting_potential(Hout)*e1;
 
 %M0 = p.mat.M0;
 
 % Integral constraint: q = 1/vol*integral(u) - c0 := 0
 %a2 = sum(M*hhat);
 
-dWout = par(3);
-Omega = sum(p.mat.M0*(what));
-I = sum(p.mat.M0*(hout^3.*hhat./h.^3));
-K = sum(p.mat.M0*(hhat.^2./h.^3));
+%dhomegaout = par(3);
+Omegahat = sum(p.mat.M0*(omegahat));
+m = sum(p.mat.M0*Hhat);
+I = sum(p.mat.M0*(Hout^3.*Hhat./H.^3));
+K = sum(p.mat.M0*(Hhat.^2./H.^3));
 
-out = [ha; c0; hmax; dWout; hout; Omega; I; K];
+out = [c0; Hmax; Hout; m; Omegahat; I; K];

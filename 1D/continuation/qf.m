@@ -11,21 +11,18 @@ c0: mean concentration (par# 2)
 %%
 par = u(p.nu+1:end);
 up = u(1:p.nu);
-c0 = par(2);
+c0 = par(1);
 
-% Mass matrix (needed for (riemann) integrals)
-M0 = p.mat.M0;
-u=p.mat.fill*up;
 
 % Integral constraint: q = 1/vol*integral(u) - c0 := 0
-q1 = sum(M0*u)/p.vol - c0; %The domain size is par(5)
+q1 = sum(M*u)/p.vol - c0; %The domain size is par(5)
 
 % Phase condition (translational invariance)
 %uold=p.u(1:p.nu); u0x=p.mat.Kx*uold; q2=u0x'*u(1:p.nu);
 
 % Center of mass condition
 x=getpte(p); x=x'; % extract the point coordinates from p
-q2 = sum(M0*(u.*x(1:end)))-p.xcm;
+q2 = sum(M*(u.*x(1:end)))-p.xcm;
 
 % To activate
 if p.reducedmass > 0

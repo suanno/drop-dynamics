@@ -1,4 +1,3 @@
-function out = second_deriv_wetting_potential(h, h_a)
-    % Derivative of the potential, WITHOUT the minus sign in front
-    out = 6*h_a.^3*h.^(-7) - 3*h.^(-4);
+function out = second_deriv_wetting_potential(H)
+    out = 6*H.^(-7)-3*H.^(-4);
 end

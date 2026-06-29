@@ -6,7 +6,7 @@ pde=stanpdeo1D(lx,2*lx/nx); p.pdeo=pde; % domain and mesh
 p.np=pde.grid.nPoints; p.nu=p.np; p.sol.xi=1/(p.nu); 
 %[po,t,e]=getpte(p);
 %p.mesh.bp=po; p.mesh.bt=t; p.mesh.be=e; % background mesh (for mesh adaption) 
-c0=par(2);
+c0=par(1);
 p.u=c0*ones(p.np,1); p.u=[p.u; par']; % initial guess (homogeneous) 
 p.vol=2*lx;   % Total volume
 p.sw.bcper=1; p=box2per(p); % prepare fill, drop for periodic BC, here in x
