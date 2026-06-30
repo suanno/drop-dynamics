@@ -171,12 +171,13 @@ end
 
 close(video);
 %% Parameters
-v1 = -1;
+v1 = 1;
 gradW = 1;
-%% Plot B0in
+%% Plot B0in and R0in
 % === Plot B-field for first value of v1 ===
-v1 = v1_values(1);
+%v1 = v1_values(1);
 
+% Compute B0in
 fval  = v1*psi1 + gradW*psi2;
 frval = diff(fval)./diff(rval);
 frval = [0; frval];
@@ -193,16 +194,40 @@ BTHETA = dfdr(R).*sin(THETA);
 BX = BR.*cos(THETA) - BTHETA.*sin(THETA);
 BY = BR.*sin(THETA) + BTHETA.*cos(THETA);
 
+% Compute R0in(r)
+g1 = H - Hout;
+eta=1;
+Qin = H.^3/(3*eta); Qout = Hout.^3/(3*eta);
+g2 = Qin - Qout;
+
+R0inval  = g1*v1 + g2*gradW;
+R0in = @(r) interp1(rval, R0inval, r, 'pchip', 0);   % 0 outside range
+RX = R0in(R);
+RY = 0.*sin(THETA);
+
+% Plot 
 figure;
-quiver(X,Y,BX,BY,0.8,'b');
+quiver(X,Y,RX,RY,0.8,'r');
 hold on
+quiver(X,Y,BX,BY,0.8,'b');
+%hold on
+% Plot contact line
 plot(xc,yc,'r','LineWidth',2)
 
-axis equal; grid on;
-axis([-20 20 -20 20])
-title(sprintf('B field for v_1 = %.2f', v1))
-xlabel('x'); ylabel('y');
 
+axis equal; grid on;
+axis([-15 15 -15 15])
+title(sprintf('{\\color{blue}hatB_0^{in}} and {\\color{red}hatR_0^{in}} for v_1 = %.2f; \\nabla_{\\chi}\\partial_h W_0^{out} = %.2f', v1, gradW))
+xlabel('x'); ylabel('y');
+%% Plot Q*grad P
+QgradPX = -(RX+BX);
+QgradPY = -(RY+BY);
+figure;
+quiver(X,Y,QgradPX,QgradPY,1,'black');
+axis equal; grid on;
+axis([-15 15 -15 15]);
+title(sprintf('- ({\\color{blue}hatB_0^{in}}+{\\color{red}hatR_0^{in}}) for v_1 = %.2f; \\nabla_{\\chi}\\partial_h W_0^{out} = %.2f', v1, gradW))
+xlabel('x'); ylabel('y');
 %% Plot Stream function Psihat and isolines (level sets)
 % === CARTESIAN GRID ===
 Nx = 300;
