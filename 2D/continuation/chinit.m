@@ -13,7 +13,7 @@ p.vol=2*lx;   % Total volume
 par(2)=par(1)*(p.vol)/2;
 p.u=h; p.u=[p.u; par']; % initial guess (homogeneous) 
 
-p.nc.nsteps=20; p.sw.foldcheck=1; p.plot.auxdict={'lambda','c0','mu0'}; 
+p.nc.nsteps=20; p.sw.foldcheck=1; p.plot.auxdict={'lambda','c1','mu1'}; 
 p.plot.pstyle=1; p.usrlam=[0 0.5 1]; p.nc.nsteps=100; p.sw.jac=1; 
 p.sw.bifcheck=2;
 p.fuha.outfu = @bra;      % Measured observables along the branch
