@@ -18,5 +18,5 @@ c1 = par(2);
 M=p.mat.M;
 
 % Integral constraint
-q = sum(M*(x.*u))/p.vol - c1; 
+q = sum(M*(x.*(u)))/p.vol - c1; 
 end

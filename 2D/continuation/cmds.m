@@ -2,17 +2,18 @@
 close all; keep pphome; 
 %% cell 1: init
 p=[]; par=[0.5 0 0]; % initial concentration, chemical potential (lagrange mult mass)
-p=chinit(p,12.5,2000,par); p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,15,2500,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
-p.nc.lammax=20; p.sol.ds=0.1; p.nc.dsmax=0.5;
+p.nc.lammax=50; p.sol.ds=0.1; p.nc.dsmax=0.3;
 %% First branch continuation
-p=setfn(p,'tr'); p=findbif(p,30);
+p=setfn(p,'tr'); p=findbif(p,100);
 %% Switch to droplet branch
-p.nc.lammax=50;
-p.sol.ds=+0.01;
-p=swibra('tr','bpt1','b1',+0.01); p=cont(p,100); 
+p.nc.lammax=100;
+p.sol.ds=+0.1;
+p.nc.dsmax=0.1;
+p=swibra('tr','bpt1','b1',+0.01); p=cont(p,20); 
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
 %p.sol.ds=-0.01;
@@ -21,16 +22,48 @@ p.sw.foldcheck=1;
 
 branch = full(p.branch);
 writematrix(branch,'2D_continuation.txt');
+Hmax=branch(7,:);
 Hout=branch(8,:);
+Hout_ = branch(13,:);
+Psi1lim = branch(14,:);
+c0 = branch(15,:);
+r0 = branch(16,:);
 I1=branch(9,:);I2=branch(10,:);
-figure(20);
-plot(Hout,I1);hold on;plot(Hout,I2); xlabel('H_0^{out}');legend('I_1','I_2');
+figure(20)
+plot(Hout_,I1);hold on;plot(Hout_,I2); xlabel('H_0^{out}');legend('I_1','I_2');ylim([0,4]);grid();
 I1=branch(11,:);I2=branch(12,:);
-figure(21);
-plot(Hout,I1);hold on;plot(Hout,I2); xlabel('H_0^{out}');legend('I_1','I_2');
+figure(21)
+plot(Hout_,I1);hold on;plot(Hout_,I2); xlabel('H_0^{out}');legend('I_1','I_2');ylim([0,4]);grid();
+% figure(80)
+% hold on
+% plot(Hout_, Hmax);
+% xlabel('H_0^{out}');
+% ylabel('H_{max}');
+% grid("on");
+% xlim([1.05, 1.3]);
+figure(81);
+plot(Hout_, Hout);
+hold on
+plot(Hout_, Hout_,'--');
+xlabel('H_0^{out} measured');
+ylabel('H_0^{out} formula');
+grid("on");
+xlim([1.01, 1.3]);
+ylim([1.01, 1.3]);
+
+figure(91);
+plot(Hout_, Psi1lim);
+hold on
+ylabel('\psi^{[1]}(\infty)');
+xlabel('H_0^{out} measured');
+figure(92);
+plot(Hout_, r0);
+hold on
+ylabel('drop radius');
+xlabel('H_0^{out} measured');
 %%
 H = p.u(1:p.nu); % Exclude the parameters of the pde
-Hout = min(H);
+Hout = Hout_;
 Hmax = max(H);
 rval=getpte(p); rval=rval';
 
@@ -66,6 +99,13 @@ fem=p.pdeo.fem;
 gr=p.pdeo.grid;
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
 psi1 = (Kpsi + Mpsi)\Fpsi;
+% Dirichlet right at x=L
+A = Kpsi + Mpsi;
+A(end,:) = 0;
+A(:,end) = 0;
+A(end, end) = 1;
+Fpsi(end) = 0;
+%psi1 = A\Fpsi;
 
 % Psi 2
 
@@ -79,6 +119,13 @@ frhs = -G.*(Hr./(H.^3));
 
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
 psi2 = (Kpsi + Mpsi)\Fpsi;
+% Dirichlet right at x=L
+A = Kpsi + Mpsi;
+A(end,:) = 0;
+A(:,end) = 0;
+A(end, end) = 1;
+Fpsi(end) = 0;
+%psi2 = A\Fpsi;
 
 
 figure(10);
@@ -88,7 +135,8 @@ figure(11);
 plot(rval,psi2);
 title('\psi^{[2]}(r)');
 
-
+psi1(end)
+psi2(end)
 %% Plot B0in animation
 gradW = 1;
 v1_values = linspace(-1,1,100);
@@ -224,20 +272,40 @@ RY = 0.*sin(THETA);
 %maxMag = max([mag1(:); mag2(:)]);
 
 figure;
-quiver(X,Y,RX,RY,1,'r');
+R0 = hypot(RX,RY);
+pcolor(X,Y,log10(R0))
+shading interp
+alpha(0.3)
+hold on
+
+quiver(X,Y,RX,RY,1,'r')
+
+axis equal tight
+colormap(turbo)
+cb = colorbar;
+cb.Label.String = 'log_{10}(|hatR_0^{in}|)';
 hold on;
-plot(xc,yc,'r','LineWidth',2)
+plot(xc,yc,'black','LineWidth',2)
 axis equal; grid on;
 axis([-15 15 -15 15])
 title(sprintf('{{\\color{red}h_a^{-1}hatR_0^{in}} }for v_1 = %.2f; (h_a^2\\eta^{-1}\\nabla_{\\chi}\\partial_h W_0^{out}) = %.2f', v1, gradW))
 xlabel('x'); ylabel('y');
 
-%hold on
+
+
 figure;
+B0 = hypot(BX,BY);
+pcolor(X,Y,log10(B0))
+shading interp
+alpha(0.3)
+hold on
 quiver(X,Y,BX,BY,0,'b');
+colormap(turbo)
+cb = colorbar;
+cb.Label.String = 'log_{10}(|hatB_0^{in}|)';
 hold on
 % Plot contact line
-plot(xc,yc,'r','LineWidth',2)
+plot(xc,yc,'black','LineWidth',2)
 
 
 axis equal; grid on;
@@ -249,6 +317,10 @@ QgradPX = (BX+RX);
 QgradPY = (BY+RY);
 figure;
 quiver(X,Y,QgradPX,QgradPY,1,'black');
+hold on
+% Plot contact line
+plot(xc,yc,'black','LineWidth',2)
+
 axis equal; grid on;
 axis([-15 15 -15 15]);
 title(sprintf(' ({\\color{blue}h_a^{-1}hatB_0^{in}}+{\\color{red}h_a^{-1}hatR_0^{in}}) for v_1 = %.2f; (h_a^2\\eta^{-1}\\nabla_{\\chi}\\partial_h W_0^{out}) = %.2f', v1, gradW))
