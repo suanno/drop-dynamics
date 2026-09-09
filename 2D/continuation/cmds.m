@@ -6,7 +6,7 @@ p=chinit(p,15,2500,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
-p.nc.lammax=50; p.sol.ds=0.1; p.nc.dsmax=0.3;
+p.nc.lammax=20; p.sol.ds=0.1; p.nc.dsmax=0.3;
 %% First branch continuation
 p=setfn(p,'tr'); p=findbif(p,100);
 %% Switch to droplet branch
@@ -63,7 +63,7 @@ ylabel('drop radius');
 xlabel('H_0^{out} measured');
 %%
 H = p.u(1:p.nu); % Exclude the parameters of the pde
-Hout = Hout_;
+Hout = Hout_(end);
 Hmax = max(H);
 rval=getpte(p); rval=rval';
 
@@ -99,13 +99,19 @@ fem=p.pdeo.fem;
 gr=p.pdeo.grid;
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
 psi1 = (Kpsi + Mpsi)\Fpsi;
-% Dirichlet right at x=L
+% Robin bc at x=L 
 A = Kpsi + Mpsi;
-A(end,:) = 0;
-A(:,end) = 0;
-A(end, end) = 1;
-Fpsi(end) = 0;
-%psi1 = A\Fpsi;
+phi = (1 + sqrt(5))/2;
+alpha_ = (1 - phi)/rval(end);
+A(end,end) = A(end,end) - alpha_;  % see sign convention below
+psi1 = A\Fpsi;
+% Dirichlet right at x=L
+% A = Kpsi + Mpsi;
+% A(end,:) = 0;
+% A(:,end) = 0;
+% A(end, end) = 1;
+% Fpsi(end) = 0;
+% psi1 = A\Fpsi;
 
 % Psi 2
 
@@ -119,13 +125,19 @@ frhs = -G.*(Hr./(H.^3));
 
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
 psi2 = (Kpsi + Mpsi)\Fpsi;
-% Dirichlet right at x=L
+% Robin bc at x=L 
 A = Kpsi + Mpsi;
-A(end,:) = 0;
-A(:,end) = 0;
-A(end, end) = 1;
-Fpsi(end) = 0;
-%psi2 = A\Fpsi;
+phi = (1 + sqrt(5))/2;
+alpha_ = (1 - phi)/rval(end);
+A(end,end) = A(end,end) - alpha_;  % see sign convention below
+psi2 = A\Fpsi;
+% Dirichlet right at x=L
+% A = Kpsi + Mpsi;
+% A(end,:) = 0;
+% A(:,end) = 0;
+% A(end, end) = 1;
+% Fpsi(end) = 0;
+% %psi2 = A\Fpsi;
 
 
 figure(10);
