@@ -11,9 +11,9 @@ p.nc.lammax=2; p.sol.ds=0.005; p.nc.dsmax=0.01;
 %% First branch continuation
 p=setfn(p,'tr'); p=findbif(p);
 %% Switch to 1 droplet branch
-p.sol.ds=-0.01;
-p.nc.dsmin=-0.1;
-p.nc.dsmax=-0.001;
+%p.sol.ds=-0.01;
+%p.nc.dsmin=-0.1;
+%p.nc.dsmax=-0.001;
 p=swibra('tr','bpt1','b1',-0.1); p=cont(p,1); 
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
@@ -32,9 +32,9 @@ p.nc.lammax=1;
 p.sw.bifcheck=0;
 p.sw.foldcheck=0;
 p.nc.lammax=5;
-p=cont(p,600);
+p=cont(p,200);
 branch = p.branch;
-writematrix(branch,'1D_c0_continuation_normalized.txt');
+writematrix(p.branch,'1D_c0_continuation_pbc.txt');
 %% [NOT NECESSARY, I can measure the lagrange multiplier while continuating in mass!]
 % Remove mass constraint (but not xcm) and continuation in lagrange
 % multiplier of the mass

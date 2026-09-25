@@ -55,14 +55,22 @@ rcrit = sqrt((Hout_ - Hmax)/c);
 
 %Contribution of B0in
 % - v1 term
-I1v1 = 2*sum(p.mat.M*(((Hhat.^2)./(H.^3)).*R));
+I1v1 = sum(p.mat.M*(((Hhat.^2)./(H.^3)).*R));
 RPsi1R = diff(R.*Psi1)./diff(R.*Psi1);
 RPsi1R = [0; RPsi1R];
-I2v1 = 2*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi1R));
+I2v1 = 0.5*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi1R));
 % - gradW term
-I1gradW = (2/3)*sum(p.mat.M*(((Hhat.*Hout_.^3)./(H.^3)).*R));
+I1gradW = sum(p.mat.M*(((Hhat.*Hout_.^3)./(H.^3)).*R));
 RPsi2R = diff(R.*Psi2)./diff(R.*Psi2);
 RPsi2R = [0; RPsi2R];
-I2gradW = 2*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi2R));
+I2gradW = 0.5*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi2R));
+% Volume
+V=2*sum(p.mat.M*Hhat);
 
-out = [Hmax; Hout; I1v1; I2v1; I1gradW; I2gradW; Hout_; Psi1lim; c0; rcrit];
+%Integrals
+Omega=sum(p.mat.M*(R.*(wetting_potential(H)-wetting_potential(Hout_))));
+V = sum(p.mat.M*(R.*Hhat));
+I=sum(p.mat.M*(((Hhat)./(H.^3)).*(R.*Hout_.^3-0.5*RPsi2R)));
+K=sum(p.mat.M*((Hhat./(H.^3)).*(Hhat.*R+0.5*RPsi1R)));
+
+out = [Omega;K;I;V; Hmax; Hout; I1v1; I2v1; I1gradW; I2gradW; Hout_; Psi1lim; c0; rcrit];

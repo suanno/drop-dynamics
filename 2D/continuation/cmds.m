@@ -2,18 +2,17 @@
 close all; keep pphome; 
 %% cell 1: init
 p=[]; par=[0.5 0 0]; % initial concentration, chemical potential (lagrange mult mass)
-p=chinit(p,15,2500,par); p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,30,5000,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
-p.nc.lammax=20; p.sol.ds=0.1; p.nc.dsmax=0.3;
+p.nc.lammax=70; p.sol.ds=0.1; p.nc.dsmax=0.3;
 %% First branch continuation
-p=setfn(p,'tr'); p=findbif(p,100);
+p=setfn(p,'tr'); p=findbif(p);
 %% Switch to droplet branch
-p.nc.lammax=100;
 p.sol.ds=+0.1;
 p.nc.dsmax=0.1;
-p=swibra('tr','bpt1','b1',+0.01); p=cont(p,20); 
+p=swibra('tr','bpt1','b1',+0.01); p=cont(p,500); 
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
 %p.sol.ds=-0.01;

@@ -5,17 +5,23 @@ import sys
 
 # Switch ON/OFF the driving forces
 switch_bulk = 0
-switch_inhomo = 0
+switch_inhomo = 1
 # Parameters (additional parameters are in the initial condition)
-ha = 0.001
-eps = 0.01
+ha = 0.5
+eps = 0.001
+try:
+    h_center
+except NameError:
+    h_center = 1.0
+
 
 if len(sys.argv) > 1:   # Set epsilon from cmd line
       eps = float(sys.argv[1])
 
-      
 def wetting_pot(h):
         return (ha**3/5*h**(-5) - 1/2*h**(-2))
+def theta(x,x0,sigma=0.1):
+      return 0.5*(1+np.tanh((x-x0)/sigma))
 
 class ThinfilmEquation(Equations):
      def __init__(self,mu=1):
@@ -23,10 +29,8 @@ class ThinfilmEquation(Equations):
              self.mu=mu # Viscosity (in the mobility Q)
              t = var("time")
              # Activate bulk force and inhomogeneous Hawmaker constant for t>t0
-             t = var("time")
-             # Activate bulk force and inhomogeneous Hawmaker constant for t>t0
              t0=1e3
-             activation_fun = 0.5*(1+np.tanh(t-t0))
+             activation_fun = theta(t,t0)
              # Select wether activate c, A or both drivings
              amplitude_C = 1
              amplitude_A = 1
@@ -37,7 +41,7 @@ class ThinfilmEquation(Equations):
              if switch_inhomo > 0:
                 self.A0 = activation_fun*amplitude_A
              else:
-                self.A0 = 0   
+                self.A0 = 0  
 
 
      def wetting_pot(self,h):
@@ -58,11 +62,10 @@ class ThinfilmEquation(Equations):
              h,v=var_and_test("h")
              p,eta=var_and_test("p")
              x = var("coordinate_x")
-             y = var("coordinate_y")
              Q=(h**3)/(3*self.mu) # Mobility
              A = 1+self.A0*eps*x  # Hawmaker constant, linearly along y-direction
-             dW = A*self.dwetting_pot(h)  # W'(h)
-             dW = dW + self.dbulk_force(x,h)
+             dW = A*self.dwetting_pot(h) + self.dbulk_force(x,h)  # W'(h)
+
              self.add_residual(weak(partial_t(h),v)+weak(Q*grad(p),grad(v)))
              self.add_residual(weak(p,eta)-weak(grad(h),grad(eta))-weak(dW,eta))
 
@@ -71,64 +74,44 @@ class ThinfilmProblem(Problem):
         super().__init__()
         self.L = L
         self.N = N
+        self.R = 1
+        self.h_center = h_center
     def define_problem(self):
-        mesh=RectangularQuadMesh(N=[self.N,self.N], size=[self.L,self.L],lower_left=[-self.L/2,-self.L/2])
+        mesh = LineMesh(minimum=-self.L/2, size=self.L, N=self.N)
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
         self.add_mesh(mesh)
-        x = var("coordinate")
+        x = var("coordinate_x")
+        h = var('h')
 
         # Assemble the system
         equations = ThinfilmEquation()  # create a Poisson equation with source g=1
         equations += TextFileOutput()  # Add a simple text file output
-        
-        r = np.sqrt(dot(x,x))
-        r2 = dot(x,x)
-
-        V = 10
-        R = 4
-        hmax = 1
-        alpha = (hmax-ha)/R**2
-        initial_state = maximum(ha,(hmax*(1-r2/R**2)))
-        #alpha = 0.25    # Fraction of system size occupied by the droplet
-        #initial_state = ha+np.exp(-r/(alpha*self.L/2))*ha*(2+np.cos(np.pi*2*(dot(x,x)**0.5)/(np.sqrt(2)*alpha*self.L)))
-        #equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*(dot(x,x)**0.5)/(np.sqrt(2)*self.L)))
-        equations += InitialCondition(h=initial_state)
+        #equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
+        h_init = self.h_center * (1 - dot(r, r) / self.R**2)  # Height functions of the droplets
+        h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
+        equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
+        #equations += PeriodicBC("right", offset=self.L) @ "left"
 
-        # Observables
-        h = var('h')
-        #hout = weak()
-        hout = ha # TODO: Measure the outer!
-        #hout = var('hout')
-
-        hhat = h-hout
-        whatin = wetting_pot(h)-wetting_pot(hout)
-        equations += IntegralObservables(excess_mass = hhat)
-        equations += IntegralObservables(Omega = whatin)
-        equations += IntegralObservables(I = hout**3*hhat/(h**3))
-        equations += IntegralObservables(K = hhat**2/h**3)
-        x = var('coordinate_x')
-        y = var('coordinate_y')
-        equations += IntegralObservables(xCMm = x*hhat)        # Need to divide by the excess mass to find vCM
-        equations += IntegralObservables(yCMm = y*hhat)
-        if switch_bulk > 0 or switch_inhomo > 0:
-                equations += IntegralObservableOutput(filename='obs_eps='+str(eps)+'bulk='+str(switch_bulk)+'inhomo='+str(switch_inhomo)+'ha='+str(ha))
-        else:
-                equations += IntegralObservableOutput(filename='obs_stat_ha='+str(ha))      # Stationary state
+        # Measure gradh close to domain boundaries (and average)
+        toll = 0.95
+        boundary_function_left = theta(x,self.L/2*toll)
+        boundary_function_right = theta(-x, self.L/2*toll)
+        equations += IntegralObservables(gradh = (grad(h)*boundary_function_left+grad(h)*boundary_function_right)/(self.L*(1-toll)))
+        equations += IntegralObservableOutput(filename='obs_hcenter=_{h_center:g}_gradA=1')      # Stationary state
         self.add_equations(equations @ "domain")  # Add the equation system on the domain named "domain"
-        
-        self.add_equations(equations @ "domain")  # Add the equation system on the domain named "domain"
-        
+        # The maximum height and its x-coordinate (droplet position) are measured from domain*.txt
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=15,N=40) as problem:
+    with ThinfilmProblem(L=25,N=1000) as problem:
+	problem.set_output_directory(f"single_droplet_hcenter_{h_center:g}_gradA=1")
 
         # Maximum refinement level
         problem.max_refinement_level = 1
         problem.max_permitted_error = 0.0005
         problem.min_permitted_error = 0.00005
-        problem.run(endtime=1e2, startstep=1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+        problem.run(endtime=10000, startstep=1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
 
         #problem.solve()  # Solve the problem
         print(problem.get_mesh("domain").evaluate_all_observables())

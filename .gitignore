@@ -3,3 +3,7 @@
 1D/continuation/f1/
 1D/continuation/b1/
 1D/continuation/tr/
+pyoomph_tutorial_scripts/
+*.txt
+*.mat
+*.avi
