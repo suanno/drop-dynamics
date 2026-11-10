@@ -9,7 +9,7 @@ amplitude_A = 1
 switch_bulk = 1
 switch_inhomo = 0
 
-# Parameters (additional parameters are in the initial condition)
+# Parameters (additional parameters are in the initial condition or among the cmd inputs)
 ha = 0.5
 eps = 0.001
 

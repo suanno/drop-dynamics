@@ -126,30 +126,6 @@ class ThinfilmProblem(Problem):
         equations += PeriodicBC("right", offset=[self.L, 0]) @ "left"
         equations += PeriodicBC("top", offset=[0, self.L]) @ "bottom"
 
-        # Measure gradh close to domain boundaries (and average)
-        toll = 0.95
-        boundary_function_left = theta(x, self.L / 2 * toll)
-        boundary_function_right = theta(-x, self.L / 2 * toll)
-
-        equations += IntegralObservables(
-            gradh=(
-                grad(h) * boundary_function_left
-                + grad(h) * boundary_function_right
-            )
-            / (self.L * (1 - toll))
-        )
-
-        equations += IntegralObservables(
-            xCM_num=x * (h - ha)
-        )
-        equations += IntegralObservables(
-            xCM_den=h - ha
-        )
-
-        equations += IntegralObservableOutput(
-            filename=f"obs_hcenter_{h_center:g}_c=1"
-        )
-
         self.add_equations(equations @ "domain")
 
         # The maximum height and its x-coordinate (droplet position)

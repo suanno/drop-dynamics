@@ -100,18 +100,6 @@ class ThinfilmProblem(Problem):
         equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
         equations += PeriodicBC("right", offset=self.L) @ "left"
-
-        # Measure gradh close to domain boundaries (and average)
-        toll = 0.8
-        boundary_function_left = theta(x,self.L/2*toll)
-        boundary_function_right = theta(-x, self.L/2*toll)
-        equations += IntegralObservables(
-            xCM_num=x * (h - ha)
-        )
-        equations += IntegralObservables(
-            xCM_den=h - ha
-        )
-        equations += IntegralObservables(gradh = (eps**(-1)*grad(h)*boundary_function_left+eps**(-1)*grad(h)*boundary_function_right)/(self.L*(1-toll)))  # Measuring the chi derivative
         equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
         self.add_equations(equations @ "domain")  # Add the equation system on the domain named "domain"
         # The maximum height and its x-coordinate (droplet position) are measured from domain*.txt
