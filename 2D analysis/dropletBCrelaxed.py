@@ -107,7 +107,7 @@ class ThinfilmProblem(Problem):
 		
 
 
-        h = var("h")  # Building disjoining pressure
+        h = var("h")
         x = var("coordinate_x")
         r = var("coordinate")
 

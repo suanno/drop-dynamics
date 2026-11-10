@@ -6,7 +6,7 @@ import sys
 # Switch ON/OFF the driving forces
 amplitude_C = 1
 amplitude_A = 1
-switch_bulk = 1
+switch_bulk = 0
 switch_inhomo = 0
 
 # Parameters (additional parameters are in the initial condition or among the cmd inputs)
@@ -108,6 +108,7 @@ class ThinfilmProblem(Problem):
         # equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
 
         r = var("coordinate")
+        h = var("h")
         h_init = self.h_center * (1 - dot(r, r) / self.R**2)  # Height functions of the droplets
         h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
@@ -117,6 +118,7 @@ class ThinfilmProblem(Problem):
         equations += PeriodicBC("top", offset=[0, self.L]) @ "bottom"
 
         self.add_equations(equations @ "domain")
+        equations += IntegralObservables(h)
         equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
 
 
