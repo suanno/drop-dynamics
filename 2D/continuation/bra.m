@@ -21,25 +21,39 @@ Hhat = H-Hout_*e1;
 % I = sum(p.mat.M*(Hout^3.*Hhat./H.^3));
 % K = sum(p.mat.M*(Hhat.^2./H.^3));
 
+% Psi^nu
 % - Solve ODE for Psi1
-G = (3*Hout_./H-2);
+%G = (3*Hout_./H-2);
 c = (H.^3).^(-1);
 a = 1 ./ ((1e-12+R.^2) .* (H.^3));    % 1e-12 To eliminate the divergence at r=0
-Hr = diff(H)./diff(R);
-Hr = [0; Hr];
-frhs = -G.*(Hr./(H.^3));
-
+%Hr = diff(H)./diff(R);
+%Hr = [0; Hr];
+%frhs = -G.*(Hr./(H.^3));
+frhs = -diff((H-Hout_)./H.^3)./diff(R);
+frhs = [0; frhs];
 fem=p.pdeo.fem;
 gr=p.pdeo.grid;
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
-Psi1 = (Kpsi + Mpsi)\Fpsi;
+% Robin bc at x=L 
+A = Kpsi + Mpsi;
+phi = (1 + sqrt(5))/2;
+alpha_ = c(end)*(1 - phi)/R(end);
+A(end,end) = A(end,end) - alpha_;
+Psi1 = A\Fpsi;
 Psi1lim = Psi1(end);
-% - Solve ODE for Psi2
-G = (Hout_.^3)./H;
-frhs = -G.*(Hr./(H.^3));
 
+% - Solve ODE for Psi2
+%G = (Hout_.^3)./H;
+%frhs = -G.*(Hr./(H.^3));
+frhs = (1/3)*diff(Hout_^3./H.^3)./diff(R);
+frhs = [0; frhs];
 [Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
-Psi2 = (Kpsi + Mpsi)\Fpsi;
+% Robin bc at x=L 
+A = Kpsi + Mpsi;
+A(end,end) = A(end,end) - alpha_;  % see sign convention below
+Psi2 = A\Fpsi;
+%Psi2lim = Psi2(end);
+
 
 % Drop radius
 x0 = R(1);  H0 = H(1);
@@ -55,22 +69,22 @@ rcrit = sqrt((Hout_ - Hmax)/c);
 
 %Contribution of B0in
 % - v1 term
-I1v1 = sum(p.mat.M*(((Hhat.^2)./(H.^3)).*R));
-RPsi1R = diff(R.*Psi1)./diff(R.*Psi1);
+K_noB = 2*pi*sum(p.mat.M*(((Hhat.^2)./(H.^3)).*R));
+RPsi1R = diff(R.*Psi1)./diff(R);
 RPsi1R = [0; RPsi1R];
-I2v1 = 0.5*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi1R));
+K_Bcorr = 3*pi*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi1R));
 % - gradW term
-I1gradW = sum(p.mat.M*(((Hhat.*Hout_.^3)./(H.^3)).*R));
-RPsi2R = diff(R.*Psi2)./diff(R.*Psi2);
+I_noB = 2*pi*sum(p.mat.M*(((Hhat.*Hout_.^3)./(H.^3)).*R));
+RPsi2R = diff(R.*Psi2)./diff(R);
 RPsi2R = [0; RPsi2R];
-I2gradW = 0.5*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi2R));
-% Volume
-V=2*sum(p.mat.M*Hhat);
+I_Bcorr = 3*pi*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi2R));
 
 %Integrals
-Omega=sum(p.mat.M*(R.*(wetting_potential(H)-wetting_potential(Hout_))));
-V = sum(p.mat.M*(R.*Hhat));
-I=sum(p.mat.M*(((Hhat)./(H.^3)).*(R.*Hout_.^3-0.5*RPsi2R)));
-K=sum(p.mat.M*((Hhat./(H.^3)).*(Hhat.*R+0.5*RPsi1R)));
+Omega=2*pi*sum(p.mat.M*(R.*(wetting_potential(H)-wetting_potential(Hout_))));
+V = 2*pi*sum(p.mat.M*(R.*Hhat));
+I=2*pi*sum(p.mat.M*(((Hhat)./(H.^3)).*(R.*Hout_.^3-3*0.5*RPsi2R)));
+K=2*pi*sum(p.mat.M*((Hhat./(H.^3)).*(Hhat.*R+3*0.5*RPsi1R)));
+%dhomega = deriv_wetting_potential(H);
+%dhOmega = sum(p.mat.M0*(dhomega));
 
-out = [Omega;K;I;V; Hmax; Hout; I1v1; I2v1; I1gradW; I2gradW; Hout_; Psi1lim; c0; rcrit];
+out = [Omega;K;I;V; Hmax; Hout; K_noB; K_Bcorr; I_noB; I_Bcorr; Hout_; Psi1lim; c0; rcrit];

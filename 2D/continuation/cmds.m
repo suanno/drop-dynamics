@@ -2,7 +2,7 @@
 close all; keep pphome; 
 %% cell 1: init
 p=[]; par=[0.5 0 0]; % initial concentration, chemical potential (lagrange mult mass)
-p=chinit(p,30,5000,par); p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,12.5,5000,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;
@@ -12,11 +12,66 @@ p=setfn(p,'tr'); p=findbif(p);
 %% Switch to droplet branch
 p.sol.ds=+0.1;
 p.nc.dsmax=0.1;
-p=swibra('tr','bpt1','b1',+0.01); p=cont(p,500); 
+p=swibra('tr','bpt1','b1',+0.01); p=cont(p,250); 
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
 %p.sol.ds=-0.01;
 %p=cont(p,100);
+
+%% Psi nu
+
+
+R=getpte(p); R=R';
+H=p.u;
+Hout_ = H(end);
+H=H(1:p.np);
+% - Solve ODE for Psi1
+%G = (3*Hout_./H-2);
+c = (H.^3).^(-1);
+a = 1 ./ ((1e-12+R.^2) .* (H.^3));    % 1e-12 To eliminate the divergence at r=0
+%Hr = diff(H)./diff(R);
+%Hr = [0; Hr];
+%frhs = -G.*(Hr./(H.^3));
+frhs = -diff((H-Hout_)./H.^3)./diff(R);
+frhs = [0; frhs];
+figure(90)
+plot(R, frhs)
+title('G^{[1]}(R)');
+
+fem=p.pdeo.fem;
+gr=p.pdeo.grid;
+[Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
+% Robin bc at x=L 
+A = Kpsi + Mpsi;
+phi = (1 + sqrt(5))/2;
+alpha_ = c(end)*(1 - phi)/R(end);
+A(end,end) = A(end,end) - alpha_;
+Psi1 = A\Fpsi;
+
+% - Solve ODE for Psi2
+%G = (Hout_.^3)./H;
+%frhs = -G.*(Hr./(H.^3));
+frhs = (1/3)*diff(Hout_^3./H.^3)./diff(R);
+frhs = [0; frhs];
+figure(91)
+plot(R, frhs)
+title('G^{[2]}(R)');
+
+[Kpsi,Mpsi,Fpsi] = fem.assema(gr,c,a,frhs);
+% Robin bc at x=L 
+A = Kpsi + Mpsi;
+A(end,end) = A(end,end) - alpha_;  % see sign convention below
+Psi2 = A\Fpsi;
+
+figure(80)
+plot(R, Psi1)
+title('\Psi^{[1]}(R)');
+figure(81)
+plot(R, Psi2)
+title('\Psi^{[2]}(R)');
+figure(82)
+plot(R,H);
+title('H(R)')
 %% Save observables
 
 branch = full(p.branch);

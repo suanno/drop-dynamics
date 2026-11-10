@@ -32,8 +32,13 @@ p.nc.lammax=1;
 p.sw.bifcheck=0;
 p.sw.foldcheck=0;
 p.nc.lammax=5;
-p=cont(p,200);
+p=cont(p,1000);
 branch = p.branch;
+
+H = p.mat.fill*u(1:p.nu); % Exclude the parameters of the pde
+Hr = diff(H)./diff(x);
+Hr = [0; Hr];
+plot(x, Hr.*(H.^(-3)-H.^(-6)))
 writematrix(p.branch,'1D_c0_continuation_pbc.txt');
 %% [NOT NECESSARY, I can measure the lagrange multiplier while continuating in mass!]
 % Remove mass constraint (but not xcm) and continuation in lagrange

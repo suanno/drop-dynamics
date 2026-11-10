@@ -17,6 +17,6 @@ p=setfn(p,'tr'); p=findbif(p);
 p=swibra('tr','bpt1','b1',-0.1); p=cont(p,1); 
 p.sw.bifcheck=0;
 p.sw.foldcheck=1;
-p=cont(p,400);
-writematrix(p.branch,'1D_c0_continuation_nbc.txt');
+p=cont(p,100);
+%writematrix(p.branch,'1D_c0_continuation_nbc.txt');
 %% The conservation of Xcm is not necessary for nbc bc as one of the boundary is the max of the drop

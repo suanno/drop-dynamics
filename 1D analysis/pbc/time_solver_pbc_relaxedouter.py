@@ -4,15 +4,21 @@ import numpy as np
 import sys
 
 # Switch ON/OFF the driving forces
+amplitude_C = 1
+amplitude_A = 1
 switch_bulk = 1
 switch_inhomo = 0
 # Parameters (additional parameters are in the initial condition)
 ha = 0.5
-eps = 0.001
 try:
     h_center
 except NameError:
     h_center = 1.0
+
+try:
+    eps
+except NameError:
+    eps = 0.001
 
 
 if len(sys.argv) > 1:   # Set epsilon from cmd line
@@ -29,11 +35,9 @@ class ThinfilmEquation(Equations):
              self.mu=mu # Viscosity (in the mobility Q)
              t = var("time")
              # Activate bulk force and inhomogeneous Hawmaker constant for t>t0
-             t0=1e3
+             t0=5
              activation_fun = theta(t,t0)
              # Select wether activate c, A or both drivings
-             amplitude_C = 1
-             amplitude_A = 1
              if switch_bulk > 0:
                 self.c = activation_fun*amplitude_C
              else:
@@ -50,9 +54,9 @@ class ThinfilmEquation(Equations):
              return (- ha**3*h**(-6) + h**(-3))
      # Bulk force on x axis
      def bulk_force(self,x,h):
-             return -eps*self.c*x*h
+             return self.c*np.sin(2*np.pi*x*eps)*h
      def dbulk_force(self,x,h):
-             return -eps*self.c*x
+             return self.c*np.sin(2*np.pi*x*eps)
 
      def define_fields(self):
              self.define_scalar_field("h","C2")
@@ -88,13 +92,13 @@ class ThinfilmProblem(Problem):
         equations += TextFileOutput()  # Add a simple text file output
         #equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
         h_init = self.h_center * (1 - x**2 / self.R**2)  # Height functions of the droplets
-        h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
+        h_init = maximum(h_init, ha)-(amplitude_C/amplitude_A)*(ha**4/3)*np.sin(2*np.pi*x*eps)      # Parabolic cup with relaxed outer film
         equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
-        #equations += PeriodicBC("right", offset=self.L) @ "left"
+        equations += PeriodicBC("right", offset=self.L) @ "left"
 
         # Measure gradh close to domain boundaries (and average)
-        toll = 0.95
+        toll = 0.8
         boundary_function_left = theta(x,self.L/2*toll)
         boundary_function_right = theta(-x, self.L/2*toll)
         equations += IntegralObservables(
@@ -103,21 +107,29 @@ class ThinfilmProblem(Problem):
         equations += IntegralObservables(
             xCM_den=h - ha
         )
-        equations += IntegralObservables(gradh = (eps**(-1)*grad(h)*boundary_function_left+eps**(-1)*grad(h)*boundary_function_right)/(self.L*(1-toll)))  # Measuring the chi derivative
-        equations += IntegralObservableOutput(filename=f'obs_hcenter=_{h_center:g}_c=1')      # Stationary state
+        equations += IntegralObservables(x_Alexis_num = x*np.exp(2*(h-ha)))
+        equations += IntegralObservables(x_Alexis_den = np.exp(2*(h-ha)))
+        sigma = 1
+        equations += IntegralObservables(x_Emeric_1 = 0.33*x*(np.exp(-dot(grad(h),grad(h))/2*sigma**2)/(2*np.pi*sigma**2)**0.5))
+        sigma = 0.1
+        equations += IntegralObservables(x_Emeric_01 = 0.33*x*(np.exp(-dot(grad(h),grad(h))/2*sigma**2)/(2*np.pi*sigma**2)**0.5))
+        sigma = 5
+        equations += IntegralObservables(x_Emeric_5 = 0.33*x*(np.exp(-dot(grad(h),grad(h))/2*sigma**2)/(2*np.pi*sigma**2)**0.5))
+        #equations += IntegralObservables(gradh = (eps**(-1)*grad(h)*boundary_function_left+eps**(-1)*grad(h)*boundary_function_right)/(self.L*(1-toll)))  # Measuring the chi derivative
+        equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
         self.add_equations(equations @ "domain")  # Add the equation system on the domain named "domain"
         # The maximum height and its x-coordinate (droplet position) are measured from domain*.txt
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=25,N=1000) as problem:
-                problem.set_output_directory(f"single_droplet_hcenter_{h_center:g}_c=1")
+    with ThinfilmProblem(L=eps**(-1),N=int(0.5*1e3/15*eps**(-1))) as problem:
+                problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}_relaxed")
 
                 # Maximum refinement level
                 problem.max_refinement_level = 1
                 problem.max_permitted_error = 0.0005
                 problem.min_permitted_error = 0.00005
-                problem.run(endtime=2000, startstep=1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+                problem.run(endtime=20, startstep=0.01, maxstep=0.1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
 
                 #problem.solve()  # Solve the problem
                 print(problem.get_mesh("domain").evaluate_all_observables())

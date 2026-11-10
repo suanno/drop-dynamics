@@ -4,8 +4,10 @@ import numpy as np
 import sys
 
 # Switch ON/OFF the driving forces
-switch_bulk = 0
-switch_inhomo = 1
+amplitude_C = 1
+amplitude_A = 1
+switch_bulk = 1
+switch_inhomo = 0
 
 # Parameters (additional parameters are in the initial condition)
 ha = 0.5
@@ -37,7 +39,7 @@ class ThinfilmEquation(Equations):
         t = var("time")
 
         # Activate bulk force and inhomogeneous Hawmaker constant for t > t0
-        t0 = 1e3
+        t0 = 6
         activation_fun = theta(t, t0)
 
         # Select whether activate c, A or both drivings
@@ -60,12 +62,11 @@ class ThinfilmEquation(Equations):
     def dwetting_pot(self, h):
         return -ha**3 * h**(-6) + h**(-3)
 
-    # Bulk force on x axis
-    def bulk_force(self, x, h):
-        return -eps * self.c * x * h
-
-    def dbulk_force(self, x, h):
-        return -eps * self.c * x
+    #def dbulk_force(self, x, h):
+    #    return -eps * self.c * x
+    
+    def dbulk_force(self,x,h):
+            return self.c*np.sin(2*np.pi*x*eps)
 
     def define_fields(self):
         self.define_scalar_field("h", "C2")
@@ -98,69 +99,39 @@ class ThinfilmProblem(Problem):
 
     def define_problem(self):        
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
-        self.add_mesh(RectangularQuadMesh(N=[self.N,self.N],size=[self.L/2,self.L/2],lower_left=[-self.L*0.5,-self.L*0.5])) 
+        self.add_mesh(RectangularQuadMesh(N=[self.N,self.N],size=[self.L,self.L],lower_left=[-self.L*0.5,-self.L*0.5])) 
 		
-
-
-        h = var("h")  # Building disjoining pressure
-        x = var("coordinate_x")
-        r = var("coordinate")
-
         # Assemble the system
         equations = ThinfilmEquation()
         equations += TextFileOutput()
 
         # equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
 
+        r = var("coordinate")
         h_init = self.h_center * (1 - dot(r, r) / self.R**2)  # Height functions of the droplets
         h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
 
         equations += SpatialErrorEstimator(h=1.0)
-
-        # equations += PeriodicBC("right", offset=self.L) @ "left"
-
-        # Measure gradh close to domain boundaries (and average)
-        toll = 0.95
-        boundary_function_left = theta(x, self.L / 2 * toll)
-        boundary_function_right = theta(-x, self.L / 2 * toll)
-
-        equations += IntegralObservables(
-            gradh=(
-                grad(h) * boundary_function_left
-                + grad(h) * boundary_function_right
-            )
-            / (self.L * (1 - toll))
-        )
-
-        equations += IntegralObservables(
-            xCM_num=x * (h - ha)
-        )
-        equations += IntegralObservables(
-            xCM_den=h - ha
-        )
-
-        equations += IntegralObservableOutput(
-            filename=f"obs_hcenter_{h_center:g}_gradA=1"
-        )
+        equations += PeriodicBC("right", offset=[self.L, 0]) @ "left"
+        equations += PeriodicBC("top", offset=[0, self.L]) @ "bottom"
 
         self.add_equations(equations @ "domain")
-
-        # The maximum height and its x-coordinate (droplet position)
-        # are measured from domain*.txt
+        equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=25, N=1000) as problem:
+    with ThinfilmProblem(L=120, N=160) as problem:
 
         # Maximum refinement level
-        problem.max_refinement_level = 1
-        problem.max_permitted_error = 0.0005
-        problem.min_permitted_error = 0.00005
-
+        problem.max_refinement_level = 6
+        #problem.max_permitted_error = 0.0005
+        #problem.min_permitted_error = 0.00005
+        problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
         problem.run(
-            endtime=2000,
-            startstep=1,
+            endtime=10,
+            startstep=0.01,
+            maxstep=0.1,
             outstep=True,
             temporal_error=1,
             spatial_adapt=problem.max_refinement_level,

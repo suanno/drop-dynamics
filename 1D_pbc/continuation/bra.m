@@ -14,6 +14,7 @@ Hout = 1+(wetting_potential(Hmax)-wetting_potential(1))/((Hmax-1)*second_deriv_w
 %hout = min(h);  %Measured hout
 Hhat = H-Hout*e1;
 omegahat = wetting_potential(H)-wetting_potential(Hout)*e1;
+dhomega = deriv_wetting_potential(H);
 
 %M0 = p.mat.M0;
 
@@ -22,8 +23,9 @@ omegahat = wetting_potential(H)-wetting_potential(Hout)*e1;
 
 %dhomegaout = par(3);
 Omegahat = sum(p.mat.M0*(omegahat));
+dhOmega = sum(p.mat.M0*(dhomega));
 V = sum(p.mat.M0*Hhat);
 I = sum(p.mat.M0*(Hout^3.*Hhat./H.^3));
 K = sum(p.mat.M0*(Hhat.^2./H.^3));
 
-out = [c0; Hmax; Hout_lim; Hout; V; Omegahat; I; K];
+out = [c0; Hmax; Hout_lim; Hout; V; Omegahat; I; K; dhOmega];
