@@ -1,9 +1,7 @@
 # Directories (at any depth)
-**/2D/continuation/tr/
-**/1D/continuation/b1/
-**/1D/continuation/f1/
-**/1D/continuation/tr/
+.*/
 **/pyoomph_tutorial_scripts/
+
 
 # File types (any directory)
 *.txt
@@ -11,3 +9,6 @@
 *.avi
 *.pdf
 *.png
+
+!1D analysis/continuation/*.txt
+!2D analysis/continuation/*.txt
