@@ -5,13 +5,13 @@ import sys
 
 # Switch ON/OFF the driving forces
 amplitude_C = 1
-amplitude_A = 1
+amplitude_A = 0
 switch_bulk = 1
 switch_inhomo = 0
 
 # Parameters (additional parameters are in the initial condition)
 ha = 0.5
-eps = 0.001
+eps = 0.00625
 
 try:
     h_center
@@ -39,7 +39,7 @@ class ThinfilmEquation(Equations):
         t = var("time")
 
         # Activate bulk force and inhomogeneous Hawmaker constant for t > t0
-        t0 = 6
+        t0 = 100
         activation_fun = theta(t, t0)
 
         # Select whether activate c, A or both drivings
@@ -99,7 +99,8 @@ class ThinfilmProblem(Problem):
         self.L = L
         self.N = N
         self.h_center = h_center
-        self.R = 1
+        #self.R = 1
+        self.R = (2*h_center/(np.sqrt(3/5)*ha**(-1)))*(1-ha/h_center)**(1/2)
 
     def define_problem(self):        
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
@@ -117,7 +118,7 @@ class ThinfilmProblem(Problem):
 
         # equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
 
-        h_init = self.h_center * (1 - x**2 / self.R**2)  # Height functions of the droplets
+        h_init = self.h_center * (1 - r**2 / self.R**2)  # Height functions of the droplets
         h_init = maximum(h_init, ha)-(amplitude_C/amplitude_A)*(ha**4/3)*np.sin(2*np.pi*x*eps)      # Parabolic cup with relaxed outer film
         
         equations += InitialCondition(h=h_init)
@@ -135,22 +136,19 @@ class ThinfilmProblem(Problem):
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=120, N=80) as problem:
+    with ThinfilmProblem(L=eps**(-1), N=100) as problem:
 
         # Maximum refinement level
-        problem.max_refinement_level = 6
+        #problem.max_refinement_level = 6
         #problem.max_permitted_error = 0.0005
         #problem.min_permitted_error = 0.00005
         problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}_relaxed")
         #problem.set_output_directory(f"single_droplet_hcenter_{h_center:g}_c=1")
-        problem.run(
-            endtime=10,
-            startstep=0.01,
-            maxstep=0.1,
-            outstep=True,
-            temporal_error=1,
-            spatial_adapt=problem.max_refinement_level,
-        )
+        problem.run(endtime=1e5-1, timestep=1e-2, outstep=True, maxstep=1e4, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
+        problem.quiet()
+        # Activate bulk force
+        problem.run(endtime=1e5+11, timestep=1e-2, outstep=True, maxstep=0.1, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
+        problem.quiet()
 
         # problem.solve()  # Solve the problem
         print(problem.get_mesh("domain").evaluate_all_observables())
