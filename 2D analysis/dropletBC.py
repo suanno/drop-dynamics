@@ -4,9 +4,9 @@ import numpy as np
 import sys
 
 # Switch ON/OFF the driving forces
-amplitude_C = 1
+amplitude_C = 0
 amplitude_A = 1
-switch_bulk = 0
+switch_bulk = 1
 switch_inhomo = 0
 
 # Parameters (additional parameters are in the initial condition or among the cmd inputs)
@@ -123,7 +123,7 @@ class ThinfilmProblem(Problem):
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=120, N=160) as problem:
+    with ThinfilmProblem(L=120, N=80) as problem:
 
         # Maximum refinement level
         problem.max_refinement_level = 6
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         #problem.min_permitted_error = 0.00005
         problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
         problem.run(
-            endtime=10,
+            endtime=100,
             startstep=0.01,
             maxstep=0.1,
             outstep=True,
