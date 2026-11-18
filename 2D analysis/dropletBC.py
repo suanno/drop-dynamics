@@ -1,18 +1,19 @@
 from pyoomph import *
+from pyoomph.equations.additional import RefineAccordingToElement
 from pyoomph.expressions import *
 import numpy as np
 import sys
 
 # Switch ON/OFF the driving forces
-amplitude_C = 1
+amplitude_C = 0
 amplitude_A = 0
-switch_bulk = 1
+switch_bulk = 0
 switch_inhomo = 0
-t0 = 1e5
+t0 = 1e6+1
 
 # Parameters (additional parameters are in the initial condition or among the cmd inputs)
 ha = 0.5
-eps = 0.00625
+eps = 0.001
 
 try:
     h_center
@@ -96,6 +97,7 @@ class ThinfilmProblem(Problem):
         self.N = N
         self.h_center = h_center
         self.R = (2*h_center/(np.sqrt(3/5)*ha**(-1)))*(1-ha/h_center)**(1/2)
+        
 
     def define_problem(self):        
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
@@ -105,36 +107,108 @@ class ThinfilmProblem(Problem):
         equations = ThinfilmEquation()
         equations += TextFileOutput()
 
-        # equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
+        # Global spatial error estimator
+        equations += SpatialErrorEstimator(
+            h=1,
+            group="global"
+        )
+        # Additional absolute-error estimator for the tail
+        equations += SpatialErrorEstimator(
+            h=1,
+            group="tail",
+            normalize_relative=0,
+            weight=1
+        )
+        # Spatial error estimator inside the droplet and in the region close to the contact line
+        lam = ha**2 / np.sqrt(3)
+        R = self.R
+        def refine_tail(e):
+            x, y = e.get_Eulerian_midpoint()
+            r = np.sqrt(x**2 + y**2)
 
+            if r < R + 6*lam:
+                return 3
+            else:
+                return 0
+
+        equations += RefineAccordingToElement(
+            refine_tail,
+            prevent_unrefinement=True
+        )
+        equations += TemporalErrorEstimator(h=1, p=1)
+
+        # Initial state
         r = var("coordinate")
         h = var("h")
         h_init = self.h_center * (1 - dot(r, r) / self.R**2)  # Height functions of the droplets
-        h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
+        deltaHout = h_center**(-1.19562246)*np.exp(-1.11011093)
+        deltaHout=0
+        hout0 = ha*(1+deltaHout)
+        h_init = maximum(h_init, hout0)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
 
-        equations += SpatialErrorEstimator(h=1.0)
         equations += PeriodicBC("right", offset=[self.L, 0]) @ "left"
         equations += PeriodicBC("top", offset=[0, self.L]) @ "bottom"
 
-        self.add_equations(equations @ "domain")
-        equations += IntegralObservables(h)
+        equations += IntegralObservables(V=var("h"))  # Total volume
         equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
+        self.add_equations(equations @ "domain")
 
 
 if __name__ == "__main__":
-    with ThinfilmProblem(L=eps**(-1), N=200) as problem:
+    with ThinfilmProblem(L=eps**(-1), N=500) as problem:
 
         # Maximum refinement level
         #problem.max_refinement_level = 6
         #problem.max_permitted_error = 0.0005
         #problem.min_permitted_error = 0.00005
+
         problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
-        problem.run(endtime=1e5-1, timestep=1e-2, outstep=True, maxstep=1e4, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
-        problem.quiet()
+        # Maximum refinement level
+        #problem.max_refinement_level = 1
+        #problem.max_permitted_error = 0.0005
+        #problem.min_permitted_error = 0.00005
+        #problem.run(endtime=5e5, startstep=0.01, maxstep=1e4, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+               
+        problem.max_refinement_level = 4
+        problem.max_permitted_error = 5e-4
+        problem.min_permitted_error = 5e-5
+
+        problem.run(
+            endtime=t0-1,
+            startstep=0.01,
+            maxstep=1e4,
+            temporal_error=1e-1,
+            outstep=True,
+            spatial_adapt=3
+        ) 
+        """
+        # Activate driving force
+        problem.run(
+            endtime=t0+10,
+            startstep=0.01,
+            maxstep=0.1,
+            temporal_error=1,
+            outstep=True,
+            spatial_adapt=5
+        ) 
+        """
+        """         
+problem.max_refinement_level = 0
+
+        problem.run(
+            endtime=1,
+            startstep=0.01,
+            maxstep=0.01,
+            outstep=True,
+            spatial_adapt=0
+        )
+        """
+        #problem.run(endtime=5e5, timestep=1e-2, outstep=True, maxstep=1e4, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
+        #problem.quiet()
         # Activate bulk force
-        problem.run(endtime=1e5+11, timestep=1e-2, outstep=True, maxstep=0.1, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
-        problem.quiet()
+        #problem.run(endtime=1e5+11, timestep=1e-2, outstep=True, maxstep=0.1, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
+        #problem.quiet()
 
         # problem.solve()  # Solve the problem
         print(problem.get_mesh("domain").evaluate_all_observables())

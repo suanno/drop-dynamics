@@ -5,9 +5,10 @@ import sys
 
 # Switch ON/OFF the driving forces
 amplitude_C = 1
-amplitude_A = 1
+amplitude_A = 0
 switch_bulk = 1
 switch_inhomo = 0
+t0=1e6
 # Parameters (additional parameters are in the initial condition)
 ha = 0.5
 try:
@@ -35,7 +36,6 @@ class ThinfilmEquation(Equations):
              self.mu=mu # Viscosity (in the mobility Q)
              t = var("time")
              # Activate bulk force and inhomogeneous Hawmaker constant for t>t0
-             t0=5
              activation_fun = theta(t,t0)
              # Select wether activate c, A or both drivings
              if switch_bulk > 0:
@@ -96,10 +96,11 @@ class ThinfilmProblem(Problem):
         #equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
         h_init = self.h_center * (1 - x**2 / self.R**2)  # Height functions of the droplets
         hout_teo = ha*(1+(1/3)*(self.omega(self.h_center/ha)-self.omega(1))/(self.h_center/ha-1)) 
-        h_init = maximum(h_init, hout_teo)  # Initial height: maximum of h1, h2 and precursor
+        h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
         equations += PeriodicBC("right", offset=self.L) @ "left"
+        equations += IntegralObservables(V=var("h"))  # Total volume
         equations += IntegralObservableOutput(filename=f'obs')      # Stationary state
         self.add_equations(equations @ "domain")  # Add the equation system on the domain named "domain"
         # The maximum height and its x-coordinate (droplet position) are measured from domain*.txt
@@ -110,11 +111,35 @@ if __name__ == "__main__":
                 problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
 
                 # Maximum refinement level
+                """
                 problem.max_refinement_level = 1
                 problem.max_permitted_error = 0.0005
                 problem.min_permitted_error = 0.00005
-                problem.run(endtime=20, startstep=0.01, maxstep=0.1, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+                problem.run(endtime=5e5, startstep=0.01, maxstep=1e4, outstep=True, temporal_error=1, spatial_adapt=problem.max_refinement_level)
+                """
 
+                problem.max_refinement_level = 1
+                problem.max_permitted_error = 5e-4
+                problem.min_permitted_error = 5e-5
+                problem.run(
+                    endtime=t0-1,
+                    startstep=0.01,
+                    maxstep=1e4,
+                    temporal_error=1e-1,
+                    outstep=True,
+                    spatial_adapt=3
+                ) 
+                problem.quiet()
+                problem.run(
+                    endtime=t0+8,
+                    startstep=0.01,
+                    maxstep=0.1,
+                    temporal_error=1e-1,
+                    outstep=True,
+                    spatial_adapt=5
+                ) 
+                #problem.run(endtime=20, timestep=1e-2, outstep=True, maxstep=1e4, temporal_error=1e-2,spatial_adapt=15,newton_solver_tolerance=1e-10)
+                problem.quiet()
                 #problem.solve()  # Solve the problem
                 print(problem.get_mesh("domain").evaluate_all_observables())
                 problem.output()  # Write output
