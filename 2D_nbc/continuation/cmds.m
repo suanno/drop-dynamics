@@ -2,7 +2,7 @@
 close all; keep pphome; 
 %% cell 1: init
 p=[]; par=[0.5 0 0]; % initial concentration, chemical potential (lagrange mult mass)
-p=chinit(p,12.5,5000,par); p.sw.qjac=0; %p.sw.verb=2;
+p=chinit(p,25,10000,par); p.sw.qjac=0; %p.sw.verb=2;
 %% Continuation parameters
 p.nc.ilam = [2, 3];
 p.nc.nq=1;

@@ -8,7 +8,7 @@ amplitude_C = 1
 amplitude_A = 0
 switch_bulk = 1
 switch_inhomo = 0
-t0=1e6
+t0=1e5
 # Parameters (additional parameters are in the initial condition)
 ha = 0.5
 try:
