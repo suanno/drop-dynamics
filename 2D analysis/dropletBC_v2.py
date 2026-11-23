@@ -1,49 +1,38 @@
-"""
-Thin-film droplet with disjoining pressure on a periodic square (non-dimensional, gamma = 1).
-
-    h_t = div( Q(h) grad p ),   Q = h^3/(3 mu)
-    p   = -lap(h) + W'(h) + c * sin(2 pi eps x),   W'(h) = -ha^3 h^-6 + h^-3
-
-Run:   python dropletBC_v2.py --omp 4        (OpenMP threads, same script serial/parallel)
-Check: python dropletBC_v2.py --quick-test   (one Newton solve + one output)
-
-Changes with respect to dropletBC.py:
-  * eps / h_center are not read from sys.argv any more (pyoomph installs its own parser)
-  * the drive is a global parameter `c` (0 -> relaxation, then set to 1), no tanh switch in time,
-    no np.* functions applied to symbolic expressions
-  * coarse base mesh (L/N = 10) + graded refinement around r = R instead of N=500 everywhere
-  * the film starts at the pressure-consistent height h_out (W'(h_out) = Laplace pressure),
-    so the slow diffusive "long tail" transient is ~10x smaller
-  * both SpatialErrorEstimators, the unused A0/switch_* machinery and dead code are removed
-"""
 from pyoomph import *
 from pyoomph.expressions import *
 from pyoomph.equations.additional import RefineAccordingToElement
 import numpy as np
 
 # ------------------------------------------------------------------ user settings
-EPS = 1e-2          # L = 1/EPS
-H_CENTER = 6.0     # drop height at the centre
-HA = 0.5            # precursor height
+ha = 0.5            # precursor height
 FINE = 3            # refinement level at the contact line (try 7 for a convergence check)
 BASE_N = 100        # base mesh N x N -> element size L/BASE_N = 10 for EPS=1e-3
 T_RELAX = 1e5       # relaxation time (c = 0)
 T_DRIVE = T_RELAX+10      # e.g. switch on the drive afterwards, None = no drive
-C_DRIVE = 0.1       # amplitude of the bulk force
 RAMP_TIME = 0.1 
+
+c=0.1
+A=1
 
 try:
     h_center
 except NameError:
     h_center = 6.0
 
+try:
+    eps
+except NameError:
+    eps = 0.01
+
 def theta(x,x0,sigma=0.1):
     return 0.5*(1+np.tanh((x-x0)/sigma))
+def wetting_pot(h):
+        return (ha**3/5*h**(-5) - 1/2*h**(-2))
 
 class ThinFilmEquation(Equations):
-    def __init__(self, ha=0.5, mu=1, c=0, eps=1e-3):
+    def __init__(self, mu=1):
         super().__init__()
-        self.ha, self.mu, self.c, self.eps = ha, mu, c, eps   # c may be a global parameter
+        self.mu = mu
 
     def define_fields(self):
         self.define_scalar_field("h", "C2")
@@ -56,49 +45,45 @@ class ThinFilmEquation(Equations):
         ramp = theta(t,T_RELAX,RAMP_TIME)
 
         Q = h**3 / (3 * self.mu)                                        # mobility
-        dW = -self.ha**3 * h**(-6) + h**(-3) + self.c * ramp * sin(2 * pi * self.eps * x)
+        dW = A*(-ha**3 * h**(-6) + h**(-3)) + c * ramp * sin(2 * pi * eps * x)
 
         self.add_residual(weak(partial_t(h), v) + weak(Q * grad(p), grad(v)))
         self.add_residual(weak(p, eta) - weak(grad(h), grad(eta)) - weak(dW, eta))
 
+def equilibrium_hout(ha, hmax, R):
+     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
+        For the pressure at the maximum height, the disjoining pressure contribution is not neglected, while the disjoining pressure
+        outside the drop is expanded to leading order in (Hout-1)^2"""
 
-def equilibrium_film_height(ha, p_drop):
-    """Solve W'(h) = p_drop on the branch h in [ha, 2^(1/3) ha] by bisection."""
-    dW = lambda h: -ha**3 * h**(-6) + h**(-3)
-    lo, hi = ha, ha * 2**(1 / 3)          # W' increases from 0 to its maximum on this interval
-    if p_drop >= dW(hi):
-        raise ValueError("Laplace pressure exceeds max W'(h): no film equilibrium")
-    for _ in range(100):
-        mid = 0.5 * (lo + hi)
-        lo, hi = (mid, hi) if dW(mid) < p_drop else (lo, mid)
-    return 0.5 * (lo + hi)
+     return ha*(1+2*ha**3*hmax/(3*R**2))
 
 
 class ThinFilmProblem(Problem):
-    def __init__(self, eps=EPS, h_center=h_center, ha=HA, fine=FINE, base_N=BASE_N):
+    def __init__(self, base_N=BASE_N):
         super().__init__()
-        self.eps, self.h_center, self.ha = eps, h_center, ha
-        self.fine, self.base_N = fine, base_N
+        self.h_center = h_center
+        self.fine = FINE
+        self.base_N = base_N
         self.L = 1 / eps
-        # centre of the refined annulus (update between run() calls if the drop moves)
+        # centre of the drop
         self.xc, self.yc = 0.0, 0.0
-        self.c = self.define_global_parameter(c=0)    # bulk-force amplitude, plain number
 
     def define_problem(self):
-        L, ha, hc = self.L, self.ha, self.h_center
-        R = 2 * hc * ha / np.sqrt(3 / 5) * np.sqrt(1 - ha / hc)   # drop radius (same formula as before)
-        lam = ha**2 / np.sqrt(3)                                    # foot length scale
+        L, hc = self.L, self.h_center
+        R = 2*hc*ha/np.sqrt(3 / 5)*(1-ha/hc)**0.5
         F = self.fine
 
         self.add_mesh(RectangularQuadMesh(N=[self.base_N] * 2, size=[L, L],
                                           lower_left=[-L / 2, -L / 2]))
 
-        eqs = ThinFilmEquation(ha=ha, c=self.c, eps=self.eps)
+        eqs = ThinFilmEquation()
         eqs += TextFileOutput()
 
         # ---- geometric refinement: element size = (L/base_N) / 2**level
         graded = [(1.0, F), (2.5, F - 1), (5.0, F - 2), (10.0, F - 3), (20.0, F - 4)]
 
+        # Recompute R. In the relaxation run it is useless as it would give the same value, but after the relaxation hc changes so it would give a better estimate during driving
+        #R = 
         def refine_target(e):
             x, y = e.get_Eulerian_midpoint()
             d = np.sqrt((x - self.xc)**2 + (y - self.yc)**2) - R
@@ -113,8 +98,7 @@ class ThinFilmProblem(Problem):
         eqs += TemporalErrorEstimator(h=1, p=1)    # needed, otherwise temporal_error= is ignored
 
         # ---- initial condition: parabolic cap on a film at the equilibrium height
-        p_drop = 4 * hc / R**2
-        h_out = equilibrium_film_height(ha, p_drop)
+        h_out = equilibrium_hout(ha,hc,R)
         r = var("coordinate")
         cap = hc * (1 - dot(r, r) / R**2)
         eqs += InitialCondition(h=maximum(cap, h_out))
@@ -129,11 +113,10 @@ class ThinFilmProblem(Problem):
 
 
 if __name__ == "__main__":
-    with ThinFilmProblem() as problem:
-        problem.set_output_directory(f"pbc_hc{problem.h_center:g}_eps{problem.eps:g}_F{problem.fine}")
+    with ThinFilmProblem(base_N=BASE_N) as problem:
+        problem.set_output_directory(f"pbc_hc{problem.h_center:g}_eps{eps:g}_F{problem.fine}")
         problem.max_refinement_level = problem.fine
-        problem.c.value = C_DRIVE   # This is constant, but there is a ramp to switch it on
-    
+
         # Stage 1: relaxation without drive
         problem.run(endtime=T_RELAX-1, startstep=0.01, maxstep=1e4,
                     temporal_error=1, outstep=1e4, spatial_adapt=problem.fine)

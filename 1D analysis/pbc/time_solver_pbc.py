@@ -3,60 +3,33 @@ from pyoomph.expressions import *
 import numpy as np
 import sys
 
-# Switch ON/OFF the driving forces
-amplitude_C = 1
-amplitude_A = 0
-switch_bulk = 1
-switch_inhomo = 0
-t0=1e5
-# Parameters (additional parameters are in the initial condition)
-ha = 0.5
+ha = 0.5            # precursor height
+T_RELAX = 3e6               # relaxation time (c = 0)
+T_DRIVE = T_RELAX+10        # e.g. switch on the drive afterwards, None = no drive
+RAMP_TIME = 0.1 
+
+A=1
+c=1
+
 try:
     h_center
 except NameError:
-    h_center = 1.0
+    h_center = 3.0
 
 try:
     eps
 except NameError:
     eps = 0.001
 
-
-if len(sys.argv) > 1:   # Set epsilon from cmd line
-      eps = float(sys.argv[1])
-
-def wetting_pot(h):
-        return (ha**3/5*h**(-5) - 1/2*h**(-2))
 def theta(x,x0,sigma=0.1):
       return 0.5*(1+np.tanh((x-x0)/sigma))
+def wetting_pot(h):
+        return (ha**3/5*h**(-5) - 1/2*h**(-2))
 
 class ThinfilmEquation(Equations):
      def __init__(self,mu=1):
-             super(ThinfilmEquation, self).__init__()
-             self.mu=mu # Viscosity (in the mobility Q)
-             t = var("time")
-             # Activate bulk force and inhomogeneous Hawmaker constant for t>t0
-             activation_fun = theta(t,t0)
-             # Select wether activate c, A or both drivings
-             if switch_bulk > 0:
-                self.c = activation_fun*amplitude_C
-             else:
-                self.c = 0
-             if switch_inhomo > 0:
-                self.A0 = activation_fun*amplitude_A
-             else:
-                self.A0 = 0  
-
-
-     def wetting_pot(self,h):
-             return (ha**3/5*h**(-5) - 1/2*h**(-2))
-     def dwetting_pot(self,h):
-             return (- ha**3*h**(-6) + h**(-3))
-     # Bulk force on x axis
-     def bulk_force(self,x,h):
-             return self.c*np.sin(2*np.pi*x*eps)*h
-     def dbulk_force(self,x,h):
-             return self.c*np.sin(2*np.pi*x*eps)
+        super(ThinfilmEquation, self).__init__()
+        self.mu=mu # Viscosity (in the mobility Q)
 
      def define_fields(self):
              self.define_scalar_field("h","C2")
@@ -66,37 +39,45 @@ class ThinfilmEquation(Equations):
              h,v=var_and_test("h")
              p,eta=var_and_test("p")
              x = var("coordinate_x")
+             t = var("time")
+             ramp = theta(t,T_RELAX,RAMP_TIME)
+
              Q=(h**3)/(3*self.mu) # Mobility
-             A = 1+self.A0*eps*x  # Hawmaker constant, linearly along y-direction
-             dW = A*self.dwetting_pot(h) + self.dbulk_force(x,h)  # W'(h)
+             dW = A*(-ha**3 * h**(-6) + h**(-3)) + c*ramp*sin(2*pi*eps*x)  # W'(h)
 
              self.add_residual(weak(partial_t(h),v)+weak(Q*grad(p),grad(v)))
              self.add_residual(weak(p,eta)-weak(grad(h),grad(eta))-weak(dW,eta))
 
+def equilibrium_hout(ha, hmax, R):
+     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
+        For the pressure at the maximum height, the disjoining pressure contribution is not neglected, while the disjoining pressure
+        outside the drop is expanded to leading order in (Hout-1)^2"""
+
+     return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
+     #return ha*(1+((4*hmax)/(3*R**2)+2/3*omega(hmax/ha)))
+
 class ThinfilmProblem(Problem):
     def __init__(self, L=20, N=1000):
         super().__init__()
+        self.h_center = h_center
         self.L = L
         self.N = N
-        self.R = 1
-        self.h_center = h_center
-    
-    def omega(self,H):
-        return (H**(-5)/5 - H**(-2)/2)
+
     def define_problem(self):
+        L, hc = self.L, self.h_center
+        R = 2*hc*ha/np.sqrt(3 / 5)*(1-ha/hc)**0.5
         mesh = LineMesh(minimum=-self.L/2, size=self.L, N=self.N)
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
         self.add_mesh(mesh)
         x = var("coordinate_x")
-        h = var('h')
-
+        
         # Assemble the system
         equations = ThinfilmEquation()  # create a Poisson equation with source g=1
         equations += TextFileOutput()  # Add a simple text file output
-        #equations += InitialCondition(h=1+0.5*np.cos(np.pi*2*x/self.L))
-        h_init = self.h_center * (1 - x**2 / self.R**2)  # Height functions of the droplets
-        hout_teo = ha*(1+(1/3)*(self.omega(self.h_center/ha)-self.omega(1))/(self.h_center/ha-1)) 
-        h_init = maximum(h_init, ha)  # Initial height: maximum of h1, h2 and precursor
+        cap = hc * (1 - x**2 / R**2)  # Height functions of the droplets
+        h_out = equilibrium_hout(ha,hc,R)
+        #h_out=ha
+        h_init = maximum(cap, h_out)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
         equations += PeriodicBC("right", offset=self.L) @ "left"
@@ -108,8 +89,9 @@ class ThinfilmProblem(Problem):
 
 if __name__ == "__main__":
     with ThinfilmProblem(L=eps**(-1),N=int(0.5*1e3/15*eps**(-1))) as problem:
-                problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
-
+                #problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
+                problem.set_output_directory(f"pbc_hc{problem.h_center:g}_eps{eps:g}_c={amplitude_C:g}")
+        
                 # Maximum refinement level
                 """
                 problem.max_refinement_level = 1
@@ -122,16 +104,16 @@ if __name__ == "__main__":
                 problem.max_permitted_error = 5e-4
                 problem.min_permitted_error = 5e-5
                 problem.run(
-                    endtime=t0-1,
+                    endtime=T_RELAX-1,
                     startstep=0.01,
-                    maxstep=1e4,
-                    temporal_error=1e-1,
+                    maxstep=1e5,
+                    temporal_error=1,
                     outstep=True,
-                    spatial_adapt=3
+                    spatial_adapt=1
                 ) 
                 problem.quiet()
                 problem.run(
-                    endtime=t0+8,
+                    endtime=T_DRIVE,
                     startstep=0.01,
                     maxstep=0.1,
                     temporal_error=1e-1,
