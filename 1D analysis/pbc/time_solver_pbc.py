@@ -2,6 +2,7 @@ from pyoomph import *
 from pyoomph.expressions import *
 import numpy as np
 import sys
+from scipy.optimize import root_scalar
 
 ha = 0.5            # precursor height
 T_RELAX = 3e6               # relaxation time (c = 0)
@@ -25,12 +26,17 @@ def theta(x,x0,sigma=0.1):
       return 0.5*(1+np.tanh((x-x0)/sigma))
 def wetting_pot(h):
         return (ha**3/5*h**(-5) - 1/2*h**(-2))
-
+def dwetting_pot(h,ha):
+        return (ha**3/5*h**(-5) - 1/2*h**(-2))
+def domega(H):
+        return (-H**(-6) + H**(-3))
+def omega(H):
+        return (1/5*H**(-5) - 1/2*H**(-2))
 class ThinfilmEquation(Equations):
      def __init__(self,mu=1):
         super(ThinfilmEquation, self).__init__()
         self.mu=mu # Viscosity (in the mobility Q)
-
+ 
      def define_fields(self):
              self.define_scalar_field("h","C2")
              self.define_scalar_field("p","C2")
@@ -43,18 +49,36 @@ class ThinfilmEquation(Equations):
              ramp = theta(t,T_RELAX,RAMP_TIME)
 
              Q=(h**3)/(3*self.mu) # Mobility
-             dW = A*(-ha**3 * h**(-6) + h**(-3)) + c*ramp*sin(2*pi*eps*x)  # W'(h)
+             dW = A*dwetting_pot(h,ha) + c*ramp*sin(2*pi*eps*x)  # W'(h)
 
              self.add_residual(weak(partial_t(h),v)+weak(Q*grad(p),grad(v)))
              self.add_residual(weak(p,eta)-weak(grad(h),grad(eta))-weak(dW,eta))
 
+""""""
 def equilibrium_hout(ha, hmax, R):
-     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
-        For the pressure at the maximum height, the disjoining pressure contribution is not neglected, while the disjoining pressure
-        outside the drop is expanded to leading order in (Hout-1)^2"""
+    """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
+        We consider the smaller root of dhWout=Pin, since we know that Hout decreases with the size of the drop in the continuation branch"""
 
-     return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
-     #return ha*(1+((4*hmax)/(3*R**2)+2/3*omega(hmax/ha)))
+    return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
+
+    f = lambda x: domega(x)-2*hmax*ha**3/R**2
+    result = root_scalar(
+        f,
+        bracket=[1, 2**(1/3)],
+        method='brentq'
+    )
+    return result.root*ha
+
+def equilibrium_film_height(ha, p_drop):
+    """Solve W'(h) = p_drop on the branch h in [ha, 2^(1/3) ha] by bisection."""
+    dW = lambda h: -ha**3 * h**(-6) + h**(-3)
+    lo, hi = ha, ha * 2**(1 / 3)          # W' increases from 0 to its maximum on this interval
+    if p_drop >= dW(hi):
+        raise ValueError("Laplace pressure exceeds max W'(h): no film equilibrium")
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if dW(mid) < p_drop else (lo, mid)
+    return 0.5 * (lo + hi)
 
 class ThinfilmProblem(Problem):
     def __init__(self, L=20, N=1000):
@@ -65,7 +89,9 @@ class ThinfilmProblem(Problem):
 
     def define_problem(self):
         L, hc = self.L, self.h_center
-        R = 2*hc*ha/np.sqrt(3 / 5)*(1-ha/hc)**0.5
+        h_out=ha    # First guess to compute R, then it will be computed later from the R and hc
+        tanTheta=np.sqrt(-2*omega(h_out/ha))
+        R = 2*hc*ha/tanTheta*(1-ha/hc)**0.5
         mesh = LineMesh(minimum=-self.L/2, size=self.L, N=self.N)
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
         self.add_mesh(mesh)
@@ -74,9 +100,15 @@ class ThinfilmProblem(Problem):
         # Assemble the system
         equations = ThinfilmEquation()  # create a Poisson equation with source g=1
         equations += TextFileOutput()  # Add a simple text file output
-        cap = hc * (1 - x**2 / R**2)  # Height functions of the droplets
+        # Since hout depends on R and viceversa, we repeat some times up to convergence
+        """
+        for i in np.arange(0,100):
+            h_out = equilibrium_hout(ha,hc,R)
+            tanTheta=np.sqrt(-2*omega(h_out/ha))
+            R=2*hc*ha/tanTheta*(1-ha/hc)**0.5
+        """
         h_out = equilibrium_hout(ha,hc,R)
-        #h_out=ha
+        cap = hc * (1 - x**2 / R**2)  # Height functions of the droplets
         h_init = maximum(cap, h_out)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)
         equations += SpatialErrorEstimator(h=1.0)
@@ -90,7 +122,7 @@ class ThinfilmProblem(Problem):
 if __name__ == "__main__":
     with ThinfilmProblem(L=eps**(-1),N=int(0.5*1e3/15*eps**(-1))) as problem:
                 #problem.set_output_directory(f"pbc_hcenter_{h_center:g}_c={amplitude_C:g}_eps={eps:g}")
-                problem.set_output_directory(f"pbc_hc{problem.h_center:g}_eps{eps:g}_c={amplitude_C:g}")
+                problem.set_output_directory(f"pbc_hc{problem.h_center:g}_eps{eps:g}_c={c:g}")
         
                 # Maximum refinement level
                 """

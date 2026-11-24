@@ -1,6 +1,7 @@
 from pyoomph import *
 from pyoomph.expressions import *
 from pyoomph.equations.additional import RefineAccordingToElement
+from scipy.optimize import root_scalar
 import numpy as np
 
 # ------------------------------------------------------------------ user settings
@@ -28,6 +29,12 @@ def theta(x,x0,sigma=0.1):
     return 0.5*(1+np.tanh((x-x0)/sigma))
 def wetting_pot(h):
         return (ha**3/5*h**(-5) - 1/2*h**(-2))
+def dwetting_pot(h,ha):
+        return (-ha**3 * h**(-6) + h**(-3))
+def domega(H):
+        return (-H**(-6) + H**(-3))
+def omega(H):
+        return (1/5*H**(-5) - 1/2*H**(-2))
 
 class ThinFilmEquation(Equations):
     def __init__(self, mu=1):
@@ -45,17 +52,24 @@ class ThinFilmEquation(Equations):
         ramp = theta(t,T_RELAX,RAMP_TIME)
 
         Q = h**3 / (3 * self.mu)                                        # mobility
-        dW = A*(-ha**3 * h**(-6) + h**(-3)) + c * ramp * sin(2 * pi * eps * x)
+        dW = A*dwetting_pot(h,ha) + c * ramp * sin(2 * pi * eps * x)
 
         self.add_residual(weak(partial_t(h), v) + weak(Q * grad(p), grad(v)))
         self.add_residual(weak(p, eta) - weak(grad(h), grad(eta)) - weak(dW, eta))
 
-def equilibrium_hout(ha, hmax, R):
-     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
-        For the pressure at the maximum height, the disjoining pressure contribution is not neglected, while the disjoining pressure
-        outside the drop is expanded to leading order in (Hout-1)^2"""
 
-     return ha*(1+2*ha**3*hmax/(3*R**2))
+def equilibrium_hout(ha, hmax, R):
+    """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;"""
+
+    #return ha*(1+2*ha**3*hmax/(3*R**2))
+
+    f = lambda x: domega(x)-4*hmax*ha**3/R**2
+    result = root_scalar(
+        f,
+        bracket=[1, 2**(1/3)],
+        method='brentq'
+    )
+    return result.root*ha
 
 
 class ThinFilmProblem(Problem):
@@ -70,7 +84,9 @@ class ThinFilmProblem(Problem):
 
     def define_problem(self):
         L, hc = self.L, self.h_center
-        R = 2*hc*ha/np.sqrt(3 / 5)*(1-ha/hc)**0.5
+        h_out=ha    # First guess to compute R, then it will be computed later from the R and hc
+        tanTheta=np.sqrt(-2*omega(h_out/ha))
+        R = 2*hc*ha/tanTheta*(1-ha/hc)**0.5
         F = self.fine
 
         self.add_mesh(RectangularQuadMesh(N=[self.base_N] * 2, size=[L, L],
@@ -98,7 +114,12 @@ class ThinFilmProblem(Problem):
         eqs += TemporalErrorEstimator(h=1, p=1)    # needed, otherwise temporal_error= is ignored
 
         # ---- initial condition: parabolic cap on a film at the equilibrium height
-        h_out = equilibrium_hout(ha,hc,R)
+        # Since hout depends on R and viceversa, we repeat some times up to convergence
+        for i in np.arange(0,100):
+            h_out = equilibrium_hout(ha,hc,R)
+            tanTheta=np.sqrt(-2*omega(h_out/ha))
+            R=2*hc*ha/tanTheta*(1-ha/hc)**0.5
+        
         r = var("coordinate")
         cap = hc * (1 - dot(r, r) / R**2)
         eqs += InitialCondition(h=maximum(cap, h_out))
