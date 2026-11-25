@@ -26,8 +26,8 @@ def theta(x,x0,sigma=0.1):
       return 0.5*(1+np.tanh((x-x0)/sigma))
 def wetting_pot(h):
         return (ha**3/5*h**(-5) - 1/2*h**(-2))
-def dwetting_pot(h,ha):
-        return (ha**3/5*h**(-5) - 1/2*h**(-2))
+def dwetting_pot(h):
+        return -ha**3*h**(-6)+h**(-3)
 def domega(H):
         return (-H**(-6) + H**(-3))
 def omega(H):
@@ -49,17 +49,17 @@ class ThinfilmEquation(Equations):
              ramp = theta(t,T_RELAX,RAMP_TIME)
 
              Q=(h**3)/(3*self.mu) # Mobility
-             dW = A*dwetting_pot(h,ha) + c*ramp*sin(2*pi*eps*x)  # W'(h)
+             dW = A*dwetting_pot(h) + c*ramp*sin(2*pi*eps*x)  # W'(h)
 
              self.add_residual(weak(partial_t(h),v)+weak(Q*grad(p),grad(v)))
              self.add_residual(weak(p,eta)-weak(grad(h),grad(eta))-weak(dW,eta))
 
-""""""
+
 def equilibrium_hout(ha, hmax, R):
     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
         We consider the smaller root of dhWout=Pin, since we know that Hout decreases with the size of the drop in the continuation branch"""
 
-    return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
+    #return ha*(1+2*ha**3*hmax/(3*R**2))
 
     f = lambda x: domega(x)-2*hmax*ha**3/R**2
     result = root_scalar(
@@ -91,7 +91,8 @@ class ThinfilmProblem(Problem):
         L, hc = self.L, self.h_center
         h_out=ha    # First guess to compute R, then it will be computed later from the R and hc
         tanTheta=np.sqrt(-2*omega(h_out/ha))
-        R = 2*hc*ha/tanTheta*(1-ha/hc)**0.5
+        #R = 2*hc*ha/tanTheta*(1-ha/hc)**0.5
+        R = 2*hc*ha/np.sqrt(3 / 5)*(1-ha/hc)**0.5
         mesh = LineMesh(minimum=-self.L/2, size=self.L, N=self.N)
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
         self.add_mesh(mesh)
@@ -108,6 +109,7 @@ class ThinfilmProblem(Problem):
             R=2*hc*ha/tanTheta*(1-ha/hc)**0.5
         """
         h_out = equilibrium_hout(ha,hc,R)
+        #h_out = equilibrium_film_height(ha, 2*hc/R**2)
         cap = hc * (1 - x**2 / R**2)  # Height functions of the droplets
         h_init = maximum(cap, h_out)  # Initial height: maximum of h1, h2 and precursor
         equations += InitialCondition(h=h_init)

@@ -27,8 +27,8 @@ def theta(x,x0,sigma=0.1):
       return 0.5*(1+np.tanh((x-x0)/sigma))
 def wetting_pot(h):
         return (ha**3/5*h**(-5) - 1/2*h**(-2))
-def dwetting_pot(h,ha):
-        return (ha**3/5*h**(-5) - 1/2*h**(-2))
+def dwetting_pot(h):
+        return -ha**3*h**(-6)+h**(-3)
 def domega(H):
         return (-H**(-6) + H**(-3))
 def omega(H):
@@ -45,11 +45,9 @@ class ThinfilmEquation(Equations):
      def define_residuals(self):
              h,v=var_and_test("h")
              p,eta=var_and_test("p")
-             x = var("coordinate_x")
-             t = var("time")
 
              Q=(h**3)/(3*self.mu) # Mobility
-             dW = A*dwetting_pot(h,ha)  # No driving
+             dW = A*dwetting_pot(h)  # No driving
 
              self.add_residual(weak(partial_t(h),v)+weak(Q*grad(p),grad(v)))
              self.add_residual(weak(p,eta)-weak(grad(h),grad(eta))-weak(dW,eta))
@@ -58,7 +56,7 @@ def equilibrium_hout(ha, hmax, R):
     """The value is computed requiring the pressure to be equal at the maximum height of the drop and far from the drop;
         We consider the smaller root of dhWout=Pin, since we know that Hout decreases with the size of the drop in the continuation branch"""
 
-    return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
+    #return ha*(1+1.1*2*ha**3*hmax/(3*R**2))
 
     f = lambda x: domega(x)-2*hmax*ha**3/R**2
     result = root_scalar(
@@ -82,7 +80,7 @@ class ThinfilmProblem(Problem):
     def define_problem(self):
         L, hc = self.L, self.h_center
         h_out=ha    # First guess to compute R, then it will be computed later from the R and hc
-        tanTheta=np.sqrt(-2*omega(h_out/ha))
+        tanTheta=np.sqrt(3/5)
         R = 2*hc*ha/tanTheta*(1-ha/hc)**0.5
         mesh = LineMesh(minimum=-self.L/2, size=self.L, N=self.N)
         # Add the mesh (default name is "domain" with boundaries "left" and "right")
@@ -148,7 +146,7 @@ if __name__ == "__main__":
                     endtime=T_RELAX ,
                     startstep=0.01,
                     maxstep=1e5,
-                    temporal_error=1,
+                    temporal_error=1e-1,
                     outstep=True,
                     spatial_adapt=1
                 ) 
@@ -180,6 +178,19 @@ if __name__ == "__main__":
 
                 write_to_cont_file() # write the first state
                 ds=1e-4
+                stop_counter=0
+                while (stop_counter<5):
+                    stop_counter +=1
+                    ds=problem.arclength_continuation(problem.V1,
+                                                    step=ds,
+                                                    spatial_adapt=1,
+                                                    max_ds=1e+4,
+                                                    newton_solver_tolerance=1e-10,
+                                                    min_ds=1e-13
+                                                    )
+                    problem.output()
+                    write_to_cont_file() # write the updated state
+                ds=-1e-2
                 stop_counter=0
                 while (stop_counter<500):
                     stop_counter +=1
