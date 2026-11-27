@@ -75,7 +75,7 @@ class ThinfilmProblem(Problem):
         ####Continuation
         self.xCOM = self.define_global_parameter(xCOM=0) 
         self.V1 = self.define_global_parameter(V1=1e4)
-        #self.vx   = self.get_global_parameter("vx")
+        self.vx   = self.get_global_parameter("vx")
 
     def define_problem(self):
         L, hc = self.L, self.h_center

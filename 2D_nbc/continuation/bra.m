@@ -25,7 +25,7 @@ Hhat = H-Hout_*e1;
 % - Solve ODE for Psi1
 %G = (3*Hout_./H-2);
 c = (H.^3).^(-1);
-a = 1 ./ ((1e-12+R.^2) .* (H.^3));    % 1e-12 To eliminate the divergence at r=0
+a = 1 ./ ((1e-14+R.^2) .* (H.^3));    % 1e-12 To eliminate the divergence at r=0
 %Hr = diff(H)./diff(R);
 %Hr = [0; Hr];
 %frhs = -G.*(Hr./(H.^3));
@@ -70,13 +70,15 @@ rcrit = sqrt((Hout_ - Hmax)/c);
 %Contribution of B0in
 % - v1 term
 K_noB = 2*pi*sum(p.mat.M*(((Hhat.^2)./(H.^3)).*R));
-RPsi1R = diff(R.*Psi1)./diff(R);
-RPsi1R = [0; RPsi1R];
+%RPsi1R = diff(R.*Psi1)./diff(R);
+%RPsi1R = [0; RPsi1R];
+RPsi1R = gradient(R.*Psi1,R);
 K_Bcorr = 3*pi*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi1R));
 % - gradW term
 I_noB = 2*pi*sum(p.mat.M*(((Hhat.*Hout_.^3)./(H.^3)).*R));
-RPsi2R = diff(R.*Psi2)./diff(R);
-RPsi2R = [0; RPsi2R];
+%RPsi2R = diff(R.*Psi2)./diff(R);
+%RPsi2R = [0; RPsi2R];
+RPsi2R = gradient(R.*Psi2,R);
 I_Bcorr = 3*pi*sum(p.mat.M*(((Hhat)./(H.^3)).*RPsi2R));
 
 %Integrals

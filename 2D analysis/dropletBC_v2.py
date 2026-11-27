@@ -6,7 +6,7 @@ import numpy as np
 
 # ------------------------------------------------------------------ user settings
 ha = 0.5            # precursor height
-FINE = 3            # refinement level at the contact line (try 7 for a convergence check)
+FINE = 5            # refinement level at the contact line (try 7 for a convergence check)
 BASE_N = 100        # base mesh N x N -> element size L/BASE_N = 10 for EPS=1e-3
 T_RELAX = 1e5       # relaxation time (c = 0)
 T_DRIVE = T_RELAX+10      # e.g. switch on the drive afterwards, None = no drive
@@ -110,8 +110,6 @@ class ThinFilmProblem(Problem):
                 return 2          # smooth interior of the drop
             return 1 if d < 60 else 0
 
-        eqs += RefineAccordingToElement(refine_target)
-        eqs += TemporalErrorEstimator(h=1, p=1)    # needed, otherwise temporal_error= is ignored
 
         # ---- initial condition: parabolic cap on a film at the equilibrium height
         # Since hout depends on R and viceversa, we repeat some times up to convergence
@@ -130,6 +128,10 @@ class ThinFilmProblem(Problem):
         eqs += IntegralObservables(V=var("h"))
         eqs += IntegralObservableOutput(filename="obs")
 
+        #eqs += RefineAccordingToElement(refine_target)
+        eqs += SpatialErrorEstimator(h=10,p=1)
+        eqs += TemporalErrorEstimator(h=10, p=1)    # needed, otherwise temporal_error= is ignored
+
         self.add_equations(eqs @ "domain")
 
 
@@ -139,12 +141,12 @@ if __name__ == "__main__":
         problem.max_refinement_level = problem.fine
 
         # Stage 1: relaxation without drive
-        problem.run(endtime=T_RELAX-1, startstep=0.01, maxstep=1e4,
-                    temporal_error=1, outstep=1e4, spatial_adapt=problem.fine)
+        problem.run(endtime=T_RELAX-1, startstep=0.01, maxstep=1e4, outstep=1e4, temporal_error=1)
         
         #problem.initialise()
         #problem.load_state("pbc_hc5_eps0.01_F3/_states/state_000006.dump", ignore_outstep=True)
 
+        """
         problem.fine = 6
         problem.max_refinement_level = problem.fine
         # Stage 2 (optional): switch the bulk force on and continue
@@ -152,6 +154,6 @@ if __name__ == "__main__":
             problem.run(endtime=T_DRIVE, startstep=0.01, maxstep=0.1,
                         temporal_error=1e-1, outstep=0.1, spatial_adapt=problem.fine)
 
-
+        """
         print(problem.get_mesh("domain").evaluate_all_observables())
         problem.output()
